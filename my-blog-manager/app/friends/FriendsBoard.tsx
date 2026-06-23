@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '../../components/BackButton';
+import { toDirectUrl } from '../../lib/picbedUtils';
+import { siteConfig } from '../../siteConfig';
 import { friendsData as initialFriends, Friend } from '../../data/friends';
 import { Plus, Pencil, Trash2, AlertTriangle, Save, Edit3, X, CloudUpload, Sparkles } from 'lucide-react';
 import { useOperations } from '../../context/OperationContext';
@@ -11,7 +13,6 @@ import FloatingImageTool from '../../components/editor/FloatingImageTool';
 
 // 🌟 新增：引入配置和评论组件
 import Comments from '../../components/Comments';
-import { siteConfig } from '../../siteConfig';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -176,7 +177,7 @@ export default function FriendsBoard() {
 
               <div className="flex items-center gap-5 relative z-10 mb-4">
                 <div className="w-16 h-16 rounded-full p-1 bg-gradient-to-tr from-indigo-500/50 to-purple-500/50 shadow-md group-hover:rotate-[360deg] transition-transform duration-1000 ease-in-out flex-shrink-0">
-                  <img src={friend.avatar} alt={friend.name} className="w-full h-full rounded-full object-cover bg-white" />
+                  <img src={toDirectUrl(friend.avatar, (siteConfig as any).picBedUrl)} alt={friend.name} className="w-full h-full rounded-full object-cover bg-white" />
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <h2 className="text-xl font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">{friend.name}</h2>

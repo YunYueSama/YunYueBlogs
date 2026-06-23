@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { siteConfig } from '../../siteConfig';
+import { toDirectUrl } from '../../lib/picbedUtils';
 import { Plus, Pencil, Trash2, Search, Sparkles, AlertTriangle, X } from 'lucide-react';
 import { useToast } from '../../components/ToastProvider';
 
@@ -218,7 +219,7 @@ export default function ChatterBoard({ chatters: initialChatters }: { chatters: 
               >
                 {chatter.cover && (
                   <div className="w-full h-52 overflow-hidden relative">
-                    <img src={chatter.cover} alt="cover" className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                    <img src={toDirectUrl(chatter.cover, (siteConfig as any).picBedUrl)} alt="cover" className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent"></div>
                   </div>
                 )}

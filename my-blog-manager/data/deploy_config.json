@@ -1,7 +1,7 @@
 {
-  "blogPath": "D:\\DEVC++\\XinghuisamaBlogs\\XHBlogs",
+  "blogPath": "D:\\Work\\Projects\\YunYueBlogs\\YunYueBlog",
   "staticRepoUrl": "",
   "staticBranch": "gh-pages",
-  "sourceRepoUrl": "",
+  "sourceRepoUrl": "git@github.com:YunYueSama/YunYueBlog.git",
   "sourceBranch": "main"
 }

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { MapPin, MessageSquare, Clock, Sparkles, Search, ArrowDownAZ, ArrowUpZA, ChevronLeft, ChevronRight, Ghost, Plus, Image as ImageIcon, X, Send, Link as LinkIcon, Zap, Trash2, AlertTriangle } from 'lucide-react';
+import { toDirectUrl } from '../../lib/picbedUtils';
 import MomentComments from '../../components/MomentComments';
 import { useToast } from '../../components/ToastProvider';
 import { siteConfig } from '../../siteConfig';
@@ -84,6 +85,7 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
     const picUrl = (siteConfig as any).picBedUrl || "https://pic.dusays.com";
     const picToken = (siteConfig as any).picBedToken;
     if (!picToken) { showToast("未配置图床 Token！", "error"); return; }
+
     setIsUploading(true);
     showToast(`正在上传 ${files.length} 张图片...`, "info");
     try {
@@ -124,7 +126,9 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
 
   const handleAddImageUrl = () => {
     if (imageUrlInput.trim()) {
-      setNewMoment(prev => ({ ...prev, images: [...prev.images, imageUrlInput.trim()] }));
+      const picBedBase = (siteConfig as any).picBedUrl;
+      const convertedUrl = toDirectUrl(imageUrlInput.trim(), picBedBase);
+      setNewMoment(prev => ({ ...prev, images: [...prev.images, convertedUrl] }));
       setImageUrlInput('');
       showToast("✅ 已添加网络图片", "success");
     }
@@ -241,12 +245,14 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
   const renderImages = (images: string[]) => {
     if (!images || images.length === 0) return null;
     const count = images.length;
+    const picBedBase = (siteConfig as any).picBedUrl;
+    const fixUrl = (url: string) => toDirectUrl(url, picBedBase);
 
     if (count === 1) {
       return (
         <div className="mt-8 flex justify-center w-full">
           <div onClick={() => setLightbox({ images, index: 0 })} className="max-w-[280px] overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-xl cursor-zoom-in group">
-            <img src={images[0]} alt="moment" className="w-full h-auto max-h-[400px] object-contain group-hover:scale-105 transition-transform duration-500" />
+            <img src={fixUrl(images[0])} alt="moment" className="w-full h-auto max-h-[400px] object-contain group-hover:scale-105 transition-transform duration-500" />
           </div>
         </div>
       );
@@ -262,7 +268,7 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
             const isLastVisible = idx === 8 && count > 9;
             return (
               <div key={idx} onClick={() => setLightbox({ images, index: idx })} className="group relative aspect-square overflow-hidden rounded-xl bg-slate-200/20 dark:bg-slate-700/20 border border-slate-200/50 dark:border-white/10 cursor-zoom-in">
-                <img src={src} alt="moment" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <img src={fixUrl(src)} alt="moment" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 {isLastVisible && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white backdrop-blur-[2px]">
                     <span className="text-xl font-black">+{count - 9}</span>
@@ -495,7 +501,7 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
                 <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 mb-8">
                   {newMoment.images.map((img, idx) => (
                     <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm group">
-                      <img src={img} alt="preview" className="w-full h-full object-cover" />
+                      <img src={toDirectUrl(img, (siteConfig as any).picBedUrl)} alt="preview" className="w-full h-full object-cover" />
                       <button
                         onClick={(e) => { e.stopPropagation(); setNewMoment(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) })) }}
                         className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
@@ -572,7 +578,7 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
               </>
             )}
             <motion.div key={lightbox.index} initial={{ opacity: 0, scale: 0.9, x: 50 }} animate={{ opacity: 1, scale: 1, x: 0 }} exit={{ opacity: 0, scale: 0.9, x: -50 }} className="relative w-full h-full flex flex-col items-center justify-center p-4 md:p-12 pointer-events-none">
-              <img src={lightbox.images[lightbox.index]} className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.5)] border border-white/10" alt="fullscreen" />
+              <img src={toDirectUrl(lightbox.images[lightbox.index], (siteConfig as any).picBedUrl)} className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.5)] border border-white/10" alt="fullscreen" />
               <div className="absolute bottom-10 px-5 py-2 rounded-full bg-white/5 backdrop-blur-md text-white/70 text-xs font-black tracking-widest border border-white/10">
                 {lightbox.index + 1} / {lightbox.images.length}
               </div>

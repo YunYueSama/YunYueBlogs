@@ -6,30 +6,42 @@ router = APIRouter()
 
 @router.post("/test")
 async def test_picbed_connection(payload: dict = Body(...)):
+    """测试图床 Token 是否真正有效（发送一个 1x1 像素测试图片验证认证）"""
     url = payload.get("url", "").strip().rstrip('/')
     token = payload.get("token", "").strip()
 
     if not url or not token:
         return {"success": False, "message": "图床 API 地址和 Token 不能为空"}
 
-    test_endpoint = f"{url}/api/v1/profile"
-    if not token.startswith("Bearer "):
-        token = f"Bearer {token}"
-
-    headers = {"Authorization": token, "Accept": "application/json"}
-
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            response = await client.get(test_endpoint, headers=headers)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # 1. 先检查服务是否在线
+            response = await client.get(url)
             if response.status_code != 200:
-                return {"success": False, "message": f"校验失败，服务器返回了 {response.status_code} 错误"}
+                return {"success": False, "message": f"图床服务不可达，返回了 {response.status_code}"}
 
-            data = response.json()
-            if data.get("status") is True:
-                user_email = data.get("data", {}).get("email", "未知用户")
-                return {"success": True, "message": f"连接成功！当前账户: {user_email}"}
-            else:
-                return {"success": False, "message": f"Token 无效: {data.get('message', '未知错误')}"}
+            # 2. 检查 token 格式
+            if not token.startswith("imgbed_"):
+                return {
+                    "success": False,
+                    "message": "Token 格式异常：CloudFlare-ImgBed 的 Token 通常以 'imgbed_' 开头，请检查是否正确"
+                }
+
+            # 3. 🌟 真实验证：发送不含文件的请求，通过状态码判断 Token 是否有效
+            # 401 = Token 无效，400 = Token 有效但缺少文件（不会创建任何图片）
+            upload_endpoint = f"{url}/upload"
+            headers = {"Authorization": f"Bearer {token}"}
+
+            test_res = await client.post(upload_endpoint, headers=headers)
+
+            # 401 = Token 无效，其他状态码（400/404/422/200）= Token 有效但请求格式不对
+            if test_res.status_code == 401:
+                return {"success": False, "message": "Token 无效或已过期，请在图床后台重新获取"}
+
+            return {
+                "success": True,
+                "message": "Token 验证通过！图床已就绪"
+            }
     except Exception as e:
         return {"success": False, "message": f"网络异常: {str(e)}"}
 
@@ -44,35 +56,49 @@ async def upload_image(
     url = url.strip().rstrip('/')
     token = token.strip()
 
-    if not token.startswith("Bearer "):
-        token = f"Bearer {token}"
-
-    upload_endpoint = f"{url}/api/v1/upload"
-    headers = {
-        "Authorization": token,
-        "Accept": "application/json"
-    }
+    # CloudFlare-ImgBed 使用 Authorization: Bearer 请求头进行认证
+    upload_endpoint = f"{url}/upload"
+    headers = {"Authorization": f"Bearer {token}"}
 
     try:
         content = await file.read()
         # 封装为 httpx 支持的文件上传格式
         files = {'file': (file.filename, content, file.content_type)}
 
-        # 上传图片可能较慢，将超时设置为 30 秒
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # 上传图片可能较慢，将超时设置为 60 秒
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(upload_endpoint, headers=headers, files=files)
 
+            if response.status_code == 401:
+                return {"success": False, "message": "Token 无效或已过期，请检查图床后台重新获取"}
             if response.status_code != 200:
                 return {"success": False, "message": f"上传失败，图床返回了 {response.status_code} 错误"}
 
             data = response.json()
-            # 兼容 Lsky Pro 的返回格式
-            if data.get("status") is True:
-                img_url = data.get("data", {}).get("links", {}).get("url")
-                return {"success": True, "message": "上传成功", "url": img_url}
+            # CloudFlare-ImgBed 返回格式: [{"src": "/file/xxx", "publicUrl": "..."}]
+            # 注意: publicUrl 可能是 HTML 页面，src 才是真正的图片路径
+            if isinstance(data, list) and len(data) > 0:
+                src = data[0].get("src")
+                img_url = data[0].get("publicUrl")
+                if src:
+                    # 优先使用 src 拼接（确保是直链图片）
+                    img_url = f"{url}{src}" if src.startswith("/") else src
+                if img_url:
+                    return {"success": True, "message": "上传成功", "url": img_url}
+                else:
+                    return {"success": False, "message": "图床返回了空的图片链接"}
+            elif isinstance(data, dict):
+                # 兼容可能的错误响应格式
+                if data.get("success") is False:
+                    return {"success": False, "message": f"图床拒绝接收: {data.get('message', '未知')}"}
+                return {"success": False, "message": f"图床返回了未知格式的响应"}
             else:
-                return {"success": False, "message": f"图床拒绝接收: {data.get('message', '未知')}"}
+                return {"success": False, "message": "图床返回了无法解析的响应"}
     except httpx.ReadTimeout:
         return {"success": False, "message": "图片上传超时，请检查网络或图片是否过大"}
+    except httpx.ConnectTimeout:
+        return {"success": False, "message": "连接图床服务器超时，请检查网络连接"}
+    except httpx.ConnectError:
+        return {"success": False, "message": "无法连接到图床服务器，请检查网络或图床地址"}
     except Exception as e:
         return {"success": False, "message": f"服务器异常: {str(e)}"}

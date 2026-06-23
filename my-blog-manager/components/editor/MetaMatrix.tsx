@@ -2,6 +2,8 @@
 
 import React, { useState, KeyboardEvent } from 'react';
 import { ImageIcon, Tag, FileText, X, Clock, CloudUpload, Smile, Save, Send } from 'lucide-react';
+import { toDirectUrl } from '../../lib/picbedUtils';
+import { siteConfig } from '../../siteConfig';
 
 interface Props {
   type: 'post' | 'chatter' | 'about';
@@ -56,7 +58,7 @@ export default function MetaMatrix({
           <Label icon={ImageIcon} text="Cover Image" color="border-indigo-500" />
           <div onClick={onOpenImageTool} className="w-full aspect-video bg-black/10 dark:bg-black/40 rounded-[32px] border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden mb-4 group relative cursor-pointer shadow-inner transition-all">
             {cover ? (
-              <img src={cover} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <img src={toDirectUrl(cover, (siteConfig as any).picBedUrl)} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
             ) : (
               <div className="flex flex-col items-center gap-2 text-slate-400">
                 <CloudUpload size={28} className="opacity-30 group-hover:opacity-100 group-hover:text-indigo-400 transition-all" />
@@ -68,7 +70,7 @@ export default function MetaMatrix({
             </div>
           </div>
           <input
-            type="text" value={cover} onChange={(e) => setCover(e.target.value)} placeholder="或手动粘贴 URL..."
+            type="text" value={cover} onChange={(e) => setCover(toDirectUrl(e.target.value, (siteConfig as any).picBedUrl))} placeholder="或手动粘贴 URL..."
             className="w-full bg-white/10 dark:bg-black/20 rounded-2xl px-5 py-3.5 text-xs text-slate-800 dark:text-slate-200 border border-white/10 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
           />
         </div>

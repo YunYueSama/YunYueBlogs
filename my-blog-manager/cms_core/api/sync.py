@@ -88,8 +88,8 @@ async def execute_sync(request: Request):
 
                     with open(dst_file, "w", encoding="utf-8") as file_out:
                         for line in lines:
-                            # 只要这一行包含以下关键词，直接跳过不写入
-                            if "picBedName:" in line or "picBedUrl:" in line or "picBedToken:" in line or "图床核心配置" in line:
+                            # 只要这一行包含以下关键词，直接跳过不写入（picBedUrl 保留，用于图片 URL 转换）
+                            if "picBedToken:" in line or "图床核心配置" in line:
                                 continue
                             file_out.write(line)
                 else:

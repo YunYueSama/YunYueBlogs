@@ -1,11 +1,16 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../ToastProvider';
+import { toDirectUrl } from '../../lib/picbedUtils';
 
 export default function BackgroundSection({ formData, handleUpdate, pushToQueue }: any) {
   const { showToast } = useToast();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // 🌟 将图床 publicUrl 转为图片直链（使用共享工具函数）
+  const picBedBase = formData.picBedUrl;
+  const convertUrl = (url: string) => toDirectUrl(url, picBedBase);
 
   // 👈 新增状态：用来存放刚刚上传成功，但还没决定是否加入背景的图片 URL
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
@@ -23,11 +28,14 @@ export default function BackgroundSection({ formData, handleUpdate, pushToQueue 
       showToast("URL不能为空哦", "warning");
       return;
     }
-    if (formData.bgImages.includes(formData.newBgUrl)) {
+    let url = formData.newBgUrl.trim();
+    // 🌟 自动转换图床 URL：publicUrl 是网页链接，需要转为 /file/ 直链才能作为图片 src
+    url = convertUrl(url);
+    if (formData.bgImages.includes(url)) {
       showToast("这张图已经在背景列表里啦", "warning");
       return;
     }
-    handleUpdate('bgImages', [...formData.bgImages, formData.newBgUrl]);
+    handleUpdate('bgImages', [...formData.bgImages, url]);
     handleUpdate('newBgUrl', '');
     showToast("✅ 成功添加背景图！", "success");
   };
@@ -123,7 +131,7 @@ export default function BackgroundSection({ formData, handleUpdate, pushToQueue 
             <AnimatePresence>
               {formData.bgImages?.map((url: string, index: number) => (
                 <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} key={index} className="relative group rounded-2xl overflow-hidden aspect-video shadow-md border border-white/20">
-                  <img src={url} alt={`bg-${index}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img src={convertUrl(url)} alt={`bg-${index}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                     <button onClick={() => removeBg(index)} className="w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center font-bold shadow-xl hover:bg-red-600 scale-0 group-hover:scale-100 transition-transform">✕</button>
                   </div>
@@ -187,7 +195,7 @@ export default function BackgroundSection({ formData, handleUpdate, pushToQueue 
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 text-center">是否将此图片设为网站轮播背景？</p>
 
               <div className="w-full aspect-video rounded-xl overflow-hidden mb-6 shadow-inner border border-slate-200 dark:border-slate-700">
-                <img src={pendingImageUrl} alt="preview" className="w-full h-full object-cover" />
+                <img src={convertUrl(pendingImageUrl)} alt="preview" className="w-full h-full object-cover" />
               </div>
 
               <div className="flex gap-3">

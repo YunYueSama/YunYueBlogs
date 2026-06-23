@@ -32,6 +32,7 @@ function SettingsContent() {
     social: siteConfig.social || {},
     cloudMusicIds: [...(siteConfig.cloudMusicIds || [])],
     bgImages: [...(siteConfig.bgImages || [])],
+    newBgUrl: "",
     gitalkConfig: siteConfig.gitalkConfig || {
       clientID: '',
       clientSecret: '',
@@ -43,6 +44,10 @@ function SettingsContent() {
     buildDate: siteConfig.buildDate || "2026-03-23T00:00:00",
     icpConfig: siteConfig.icpConfig || { name: "", link: "" },
     footerBadges: [...(siteConfig.footerBadges || [])],
+    // 👇 🌟 图床配置初始化（确保粘贴 URL 时能正确转换）
+    picBedName: siteConfig.picBedName || "",
+    picBedUrl: siteConfig.picBedUrl || "",
+    picBedToken: siteConfig.picBedToken || "",
     // 👇 🌟 初始化小猫 AI 配置数据
     geminiConfig: siteConfig.geminiConfig || {
       modelId: 'gemini-2.5-flash-lite',

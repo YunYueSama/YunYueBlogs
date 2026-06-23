@@ -4,6 +4,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toDirectUrl } from '../lib/picbedUtils';
+import { siteConfig } from '../siteConfig';
 
 export default function LatestChatterCarousel({ chatters }: { chatters: any[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -41,7 +43,7 @@ export default function LatestChatterCarousel({ chatters }: { chatters: any[] })
           transition={{ duration: 0.8, ease: "easeInOut" }}
           className="absolute inset-0 z-0"
         >
-          <img src={currentChatter.cover} className="w-full h-full object-cover opacity-80 dark:opacity-60 transition-transform duration-1000 group-hover:scale-105" alt="Chatter Cover" />
+          {currentChatter.cover && <img src={toDirectUrl(currentChatter.cover, (siteConfig as any).picBedUrl)} className="w-full h-full object-cover opacity-80 dark:opacity-60 transition-transform duration-1000 group-hover:scale-105" alt="Chatter Cover" />}
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-black/10"></div>
         </motion.div>
       </AnimatePresence>

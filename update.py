@@ -46,14 +46,14 @@ def main():
     print_step("[2/4] 执行核心文件精准替换...")
     files_to_update = [
         "update.py", "update.bat",
-        "LICENSE", "README.md", "scripts/checkConfig.mjs",
+        "LICENSE", "README.md", "scripts/checkConfig.mjs", "README_en.md",
 
         # 前端文件
         "XHBlogs/app/about/page.tsx", "XHBlogs/app/api", "XHBlogs/app/chatter",
         "XHBlogs/app/friends", "XHBlogs/app/moments", "XHBlogs/app/music",
         "XHBlogs/app/photowall", "XHBlogs/app/posts", "XHBlogs/app/projects",
         "XHBlogs/app/timeline", "XHBlogs/app/globals.css", "XHBlogs/app/layout.tsx",
-        "XHBlogs/app/page.tsx", "XHBlogs/components",
+        "XHBlogs/app/page.tsx", "XHBlogs/components", "XHBlogs/public", "XHBlogs/app/tree",
         "XHBlogs/.gitignore", "XHBlogs/package.json", "XHBlogs/package-lock.json",
         "XHBlogs/postcss.config.mjs", "XHBlogs/tsconfig.json",
 
@@ -67,8 +67,8 @@ def main():
         "my-blog-manager/app/settings", "my-blog-manager/app/timeline",
         "my-blog-manager/app/globals.css", "my-blog-manager/app/layout.tsx",
         "my-blog-manager/app/page.tsx", "my-blog-manager/cms_core",
-        "my-blog-manager/components", "my-blog-manager/context",
-        "my-blog-manager/.gitignore", "my-blog-manager/launcher.py",
+        "my-blog-manager/components", "my-blog-manager/context", "my-blog-manager/app/tree",
+        "my-blog-manager/.gitignore", "my-blog-manager/launcher.py", "my-blog-manager/public",
         "my-blog-manager/package.json", "my-blog-manager/package-lock.json",
         "my-blog-manager/postcss.config.mjs", "my-blog-manager/run_me.py",
         "my-blog-manager/Start.bat", "my-blog-manager/tsconfig.json"
@@ -89,7 +89,7 @@ def main():
     if os.path.exists(os.path.join("scripts", "checkConfig.mjs")):
         run_cmd("node scripts/checkConfig.mjs")
 
-    print_step("✨ 升级完毕！")
+    print_step("✨ 升级完毕！如果有遗漏，请再次启动本程序！")
 
 
 if __name__ == "__main__":

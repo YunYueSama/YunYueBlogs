@@ -1,0 +1,22 @@
+# 博客前端（独立仓库）
+YunYueBlog/
+
+# Claude 配置
+.claude/
+
+# IDE
+.idea/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 本地数据
+manager_data/
+
+# 空文件
+$null
+
+# 系统文件
+.DS_Store
+Thumbs.db

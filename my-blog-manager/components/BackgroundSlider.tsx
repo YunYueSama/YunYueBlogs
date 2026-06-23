@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { siteConfig } from '../siteConfig';
+import { toDirectUrl } from '../lib/picbedUtils';
 
 export default function BackgroundSlider() {
   const [index, setIndex] = useState(0);
-  const images = siteConfig.bgImages;
+  const picBedBase = (siteConfig as any).picBedUrl;
+  const images = siteConfig.bgImages.map(url => toDirectUrl(url, picBedBase));
 
   useEffect(() => {
     if (images.length <= 1) return;

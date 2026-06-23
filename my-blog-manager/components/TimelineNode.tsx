@@ -3,6 +3,8 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Pencil, Trash2, Calendar, Tag } from "lucide-react";
+import { toDirectUrl } from '../lib/picbedUtils';
+import { siteConfig } from '../siteConfig';
 
 interface Props {
   post: any;
@@ -56,7 +58,7 @@ export default function TimelineNode({ post, index, onDelete }: Props) {
 
             {/* 封面图 */}
             <div className="w-full h-40 overflow-hidden relative">
-              <img src={post.cover} alt={post.title} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+              <img src={toDirectUrl(post.cover, (siteConfig as any).picBedUrl)} alt={post.title} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-80" />
 
               <div className="absolute bottom-4 left-6 flex items-center gap-2 text-[10px] font-black text-white/90 uppercase tracking-widest">

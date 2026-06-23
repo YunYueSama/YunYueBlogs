@@ -15,6 +15,13 @@ import { Color } from '@tiptap/extension-color';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 
+// 🌟 引入 Markdown 插件
+import { Markdown } from 'tiptap-markdown';
+
+// 🌟 引入满血版 C++ 语法高亮
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { createLowlight, all } from 'lowlight';
+
 import {
   Undo2, Redo2, Eraser, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ListTodo,
@@ -22,6 +29,8 @@ import {
   Type, ImageIcon, Quote, RemoveFormatting, ChevronDown,
   Pipette, Hash, Check, Link2, Superscript as SupIcon, Subscript as SubIcon, Minus, Palette, Lock
 } from 'lucide-react';
+
+const lowlight = createLowlight(all);
 
 const CustomImage = Image.extend({
   addAttributes() {
@@ -44,18 +53,56 @@ const FontSize = Extension.create({
   addCommands() { return { setFontSize: (fontSize: string) => ({ chain }) => chain().setMark('textStyle', { fontSize }).run() }; },
 });
 
+// 🌟 终极修复：彻底废弃 absolute 下拉框，升级为 Fixed 居中模态框 (Modal)！
+// 这样就能 100% 逃脱父级容器的 overflow 限制，绝对不可能再被遮挡！
 const CustomColorPicker = ({ activeColor, onSelect, onConfirm, recentColors, onClose }: any) => {
   const presets = ['#000000', '#6366F1', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6'];
   const [hex, setHex] = useState(activeColor);
   return (
     <>
-      <div className="fixed inset-0 z-[90]" onClick={onClose} />
-      <div className="absolute top-full mt-3 right-0 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[32px] p-6 shadow-2xl border border-white/40 dark:border-white/10 z-[100] animate-in fade-in zoom-in duration-200">
+      {/* 带有毛玻璃模糊效果的全屏遮罩 */}
+      <div className="fixed inset-0 z-[9990] bg-slate-900/20 dark:bg-black/40 backdrop-blur-sm transition-all" onClick={onClose} />
+
+      {/* 永远居中显示的调色板面板 */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[32px] p-6 shadow-2xl border border-white/40 dark:border-white/10 z-[9999] animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col gap-5">
-          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color Palette</span><button onClick={() => onConfirm(hex)} className="w-8 h-8 flex items-center justify-center bg-indigo-500 text-white rounded-full"><Check size={16}/></button></div>
-          <div className="grid grid-cols-4 gap-2.5">{presets.map(c => <button key={c} onClick={() => { setHex(c); onSelect(c); }} className="w-full aspect-square rounded-xl border border-white/20" style={{ backgroundColor: c }} />)}</div>
-          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-white/10"><Hash size={14} className="text-slate-400" /><input type="text" value={(hex || '').replace('#','')} onChange={(e) => { const val = '#' + e.target.value; setHex(val); if(val.length === 7) onSelect(val); }} className="bg-transparent w-full text-xs font-black outline-none uppercase text-slate-800 dark:text-slate-200" /></div>
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">{recentColors.map((c: string) => <button key={c} onClick={() => { setHex(c); onSelect(c); }} className="w-5 h-5 rounded-full border border-white/20" style={{ backgroundColor: c }} />)}</div>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color Palette</span>
+            <button onClick={() => onConfirm(hex)} className="w-8 h-8 flex items-center justify-center bg-indigo-500 text-white rounded-full hover:scale-110 transition-transform">
+              <Check size={16}/>
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-2.5">
+            {presets.map(c => (
+              <button
+                key={c}
+                onClick={() => { setHex(c); onSelect(c); }}
+                className="w-full aspect-square rounded-xl border border-white/20 hover:scale-110 hover:shadow-md transition-all"
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-white/10 shadow-inner">
+            <Hash size={14} className="text-slate-400" />
+            <input
+              type="text"
+              value={(hex || '').replace('#','')}
+              onChange={(e) => { const val = '#' + e.target.value; setHex(val); if(val.length === 7) onSelect(val); }}
+              className="bg-transparent w-full text-sm font-black outline-none uppercase text-slate-800 dark:text-slate-200"
+            />
+          </div>
+          {recentColors && recentColors.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200/50 dark:border-white/10">
+              {recentColors.map((c: string) => (
+                <button
+                  key={c}
+                  onClick={() => { setHex(c); onSelect(c); }}
+                  className="w-6 h-6 rounded-full border border-white/40 shadow-sm hover:scale-125 transition-transform"
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -89,7 +136,14 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        codeBlock: { HTMLAttributes: { class: 'bg-slate-950 text-indigo-300 p-8 rounded-[2rem] font-mono my-8' } },
+        codeBlock: false,
+      }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: 'cpp',
+        HTMLAttributes: {
+          class: 'bg-[#282c34] text-[#abb2bf] p-6 rounded-[1.5rem] font-mono my-6 overflow-x-auto shadow-inner'
+        },
       }),
       Underline, Subscript, Superscript, TextStyle, Color, FontSize, CustomImage,
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-indigo-500 underline cursor-pointer font-bold' } }),
@@ -118,14 +172,10 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         if (onChange) onChange();
       }
     },
-    // 🌟 终极妥协大法：直接在源头把 P 标签拆开，填入真实的换行字符！
     getContent: () => {
       if (!editor) return '';
       let html = editor.getHTML();
 
-      // 暴力替换：匹配所有形式的空段落，直接替换为一个包含 <br> 和零宽空格的结构
-      // 在上一步咱们后端的 python 脚本里，已经写了 re.sub(r'<br\s*\/?>', '\n\n', md_content)
-      // 只要这里生成了纯正的 <br>，后端就会把它强行转成 \n\n，绝对不会丢！
       html = html.replace(/<p><\/p>/gi, '<br>&zwj;');
       html = html.replace(/<p><br><\/p>/gi, '<br>&zwj;');
 
@@ -136,7 +186,8 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
   useEffect(() => {
     if (!editor || !initialContent) return;
     if (loadedContentRef.current !== initialContent) {
-      editor.commands.setContent(initialContent, false);
+      const safeContent = initialContent.replace(/~~([\s\S]*?)~~/g, '<s>$1</s>');
+      editor.commands.setContent(safeContent, false);
       loadedContentRef.current = initialContent;
     }
   }, [editor, initialContent]);
@@ -174,7 +225,56 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
 
   return (
     <div className="flex flex-col h-full w-full min-h-0 bg-transparent relative">
-      <style dangerouslySetInnerHTML={{ __html: `.editor-content-area h1 { font-size: 3rem !important; font-weight: 950 !important; margin-bottom: 2rem !important; margin-top: 3rem !important; line-height: 1.1; color: inherit; } .editor-content-area h2 { font-size: 2.2rem !important; font-weight: 800 !important; margin-bottom: 1.5rem !important; margin-top: 2rem !important; } .editor-content-area h3 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 1rem !important; } .editor-content-area p { font-size: 1.15rem !important; line-height: 1.85 !important; } .editor-content-area ul { list-style-type: disc !important; padding-left: 1.5rem !important; } .editor-content-area ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }`}} />
+      <style dangerouslySetInnerHTML={{ __html: `
+        .editor-content-area h1 { font-size: 3rem !important; font-weight: 950 !important; margin-bottom: 2rem !important; margin-top: 3rem !important; line-height: 1.1; color: inherit; } 
+        .editor-content-area h2 { font-size: 2.2rem !important; font-weight: 800 !important; margin-bottom: 1.5rem !important; margin-top: 2rem !important; } 
+        .editor-content-area h3 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 1rem !important; } 
+        .editor-content-area p { font-size: 1.15rem !important; line-height: 1.85 !important; } 
+        .editor-content-area ul { list-style-type: disc !important; padding-left: 1.5rem !important; } 
+        .editor-content-area ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
+        
+        .editor-content-area s, .editor-content-area del { text-decoration-line: line-through !important; opacity: 0.6; }
+
+        .editor-content-area blockquote {
+          border-left: 4px solid #6366f1 !important;
+          background-color: rgba(99, 102, 241, 0.05) !important;
+          padding: 1rem 1.5rem !important;
+          margin: 1.5rem 0 !important;
+          border-radius: 0 1.25rem 1.25rem 0 !important;
+          font-style: italic !important;
+          color: #64748b !important;
+        }
+        .editor-content-area blockquote p {
+          margin: 0 !important; 
+          color: inherit !important;
+        }
+        .dark .editor-content-area blockquote {
+          border-left-color: #818cf8 !important;
+          background-color: rgba(129, 140, 248, 0.1) !important;
+          color: #94a3b8 !important;
+        }
+
+        .editor-content-area pre code, .editor-content-area p code {
+          font-family: ui-rounded, 'Quicksand', 'Nunito', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, monospace !important;
+          font-variant-ligatures: contextual !important;
+          font-weight: 500 !important;
+          letter-spacing: 0.02em !important;
+        }
+        
+        .editor-content-area p code {
+           background-color: rgba(99, 102, 241, 0.1) !important; color: #6366f1 !important; padding: 0.2rem 0.4rem !important; border-radius: 0.5rem !important; font-size: 0.85em !important;
+        }
+
+        .editor-content-area pre code .hljs-comment, .editor-content-area pre code .hljs-quote { color: #5c6370; font-style: italic; }
+        .editor-content-area pre code .hljs-doctag, .editor-content-area pre code .hljs-keyword, .editor-content-area pre code .hljs-formula { color: #c678dd; }
+        .editor-content-area pre code .hljs-keyword.type_, .editor-content-area pre code .hljs-type { color: #c678dd; } 
+        .editor-content-area pre code .hljs-section, .editor-content-area pre code .hljs-name, .editor-content-area pre code .hljs-selector-tag, .editor-content-area pre code .hljs-deletion, .editor-content-area pre code .hljs-subst { color: #e06c75; }
+        .editor-content-area pre code .hljs-literal { color: #56b6c2; }
+        .editor-content-area pre code .hljs-string, .editor-content-area pre code .hljs-regexp, .editor-content-area pre code .hljs-addition, .editor-content-area pre code .hljs-attribute, .editor-content-area pre code .hljs-meta-string { color: #98c379; }
+        .editor-content-area pre code .hljs-built_in, .editor-content-area pre code .hljs-class .hljs-title, .editor-content-area pre code .hljs-title.class_ { color: #e6c07b; } 
+        .editor-content-area pre code .hljs-attr, .editor-content-area pre code .hljs-variable, .editor-content-area pre code .hljs-template-variable, .editor-content-area pre code .hljs-selector-class, .editor-content-area pre code .hljs-selector-attr, .editor-content-area pre code .hljs-selector-pseudo, .editor-content-area pre code .hljs-number { color: #d19a66; }
+        .editor-content-area pre code .hljs-symbol, .editor-content-area pre code .hljs-bullet, .editor-content-area pre code .hljs-link, .editor-content-area pre code .hljs-meta, .editor-content-area pre code .hljs-selector-id, .editor-content-area pre code .hljs-title, .editor-content-area pre code .hljs-title.function_ { color: #61aeee; } 
+      `}} />
 
       <div className="shrink-0 px-12 pt-14 pb-4 flex items-center gap-4">
         <input
@@ -227,7 +327,13 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         </div>
 
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
-        <div className="flex items-center gap-1"><Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}><Bold size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}><Italic size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')}><UnderlineIcon size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}><Strikethrough size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}><Code2 size={16}/></Btn></div>
+        <div className="flex items-center gap-1">
+          <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}><Bold size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}><Italic size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')}><UnderlineIcon size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}><Strikethrough size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}><Code2 size={16}/></Btn>
+        </div>
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
         <div className="flex items-center gap-1"><Btn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })}><AlignLeft size={16}/></Btn><Btn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })}><AlignCenter size={16}/></Btn><Btn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })}><AlignRight size={16}/></Btn></div>
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
@@ -244,10 +350,36 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         {editor.isActive('image') && <div className="flex items-center gap-1 ml-4 bg-indigo-500/10 p-1 px-3 rounded-2xl border border-indigo-500/20 border-dashed animate-in slide-in-from-left">{['25%', '50%', '75%', '100%'].map(s => <button key={s} onClick={() => editor.chain().focus().updateAttributes('image', { width: s }).run()} className="px-2 py-1 text-[9px] font-bold hover:bg-white rounded-lg transition-all">{s}</button>)}</div>}
         <div className="flex-1" />
         <div className="flex items-center gap-4">
-          <div className="relative"><div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner"><Palette size={14} className="text-slate-400 mr-2" /><div className="flex items-center gap-1 pr-2 border-r border-white/10">{textColors.map(c => <button key={c} onClick={() => editor.chain().focus().setColor(c).run()} onContextMenu={(e) => { e.preventDefault(); setTextColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-full border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}</div><button onClick={() => { setShowTextPicker(!showTextPicker); setShowHighlightPicker(false); }} className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 shadow-xl flex items-center justify-center border border-indigo-500/30"><Pipette size={14} className="text-indigo-500" /></button></div>{showTextPicker && <CustomColorPicker activeColor="#6366F1" recentColors={textColors} onClose={() => setShowTextPicker(false)} onSelect={(c: string) => editor.chain().focus().setColor(c).run()} onConfirm={(c: string) => { if(!textColors.includes(c)) setTextColors(p => [c, ...p].slice(0, 6)); setShowTextPicker(false); }} />}</div>
-          <div className="relative"><div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner"><Highlighter size={14} className="text-slate-400 mr-2" /><div className="flex items-center gap-1 pr-2 border-r border-white/10">{highlightColors.map(c => <button key={c} onClick={() => editor.chain().focus().setHighlight({ color: c }).run()} onContextMenu={(e) => { e.preventDefault(); setHighlightColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-md border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}</div><button onClick={() => { setShowHighlightPicker(!showHighlightPicker); setShowTextPicker(false); }} className="w-8 h-8 rounded-xl bg-yellow-400 shadow-xl flex items-center justify-center border border-white/20"><Highlighter size={14} className="text-white" /></button></div>{showHighlightPicker && <CustomColorPicker activeColor="#FEF08A" recentColors={highlightColors} onClose={() => setShowHighlightPicker(false)} onSelect={(c: string) => editor.chain().focus().setHighlight({ color: c }).run()} onConfirm={(c: string) => { if(!highlightColors.includes(c)) setHighlightColors(p => [c, ...p].slice(0, 6)); setShowHighlightPicker(false); }} />}</div>
+          <div className="relative">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner">
+              <Palette size={14} className="text-slate-400 mr-2" />
+              <div className="flex items-center gap-1 pr-2 border-r border-white/10">
+                {textColors.map(c => <button key={c} onClick={() => editor.chain().focus().setColor(c).run()} onContextMenu={(e) => { e.preventDefault(); setTextColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-full border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}
+              </div>
+              <button onClick={() => { setShowTextPicker(true); setShowHighlightPicker(false); }} className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 shadow-xl flex items-center justify-center border border-indigo-500/30 ml-1">
+                <Pipette size={14} className="text-indigo-500" />
+              </button>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner">
+              <Highlighter size={14} className="text-slate-400 mr-2" />
+              <div className="flex items-center gap-1 pr-2 border-r border-white/10">
+                {highlightColors.map(c => <button key={c} onClick={() => editor.chain().focus().setHighlight({ color: c }).run()} onContextMenu={(e) => { e.preventDefault(); setHighlightColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-md border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}
+              </div>
+              <button onClick={() => { setShowHighlightPicker(true); setShowTextPicker(false); }} className="w-8 h-8 rounded-xl bg-yellow-400 shadow-xl flex items-center justify-center border border-white/20 ml-1">
+                <Highlighter size={14} className="text-white" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* 将弹窗从 Toolbar 结构中抽离出来，独立于 Flex 布局之外！ */}
+      {showTextPicker && <CustomColorPicker activeColor="#6366F1" recentColors={textColors} onClose={() => setShowTextPicker(false)} onSelect={(c: string) => editor.chain().focus().setColor(c).run()} onConfirm={(c: string) => { if(!textColors.includes(c)) setTextColors(p => [c, ...p].slice(0, 6)); setShowTextPicker(false); }} />}
+      {showHighlightPicker && <CustomColorPicker activeColor="#FEF08A" recentColors={highlightColors} onClose={() => setShowHighlightPicker(false)} onSelect={(c: string) => editor.chain().focus().setHighlight({ color: c }).run()} onConfirm={(c: string) => { if(!highlightColors.includes(c)) setHighlightColors(p => [c, ...p].slice(0, 6)); setShowHighlightPicker(false); }} />}
+
       <div className="flex-1 overflow-y-auto px-12 py-12 custom-scrollbar"><EditorContent editor={editor} /></div>
     </div>
   );

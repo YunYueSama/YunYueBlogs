@@ -42,7 +42,7 @@ def dict_to_ts_string(data, indent=2):
 
 
 # =========================================================
-# 🚀 接口 1：读取配置 (GET) - 终极安全隔离版
+# 🚀 接口 1：读取配置 (GET) - 终极安全隔离版 (🌟 修复布尔值读取)
 # =========================================================
 @router.get("/get")
 def get_site_config():
@@ -68,7 +68,7 @@ def get_site_config():
 
                 sub_dict = {}
                 # 提取字符串（支持安全匹配包含 \n 的字符串）
-                for m in re.finditer(r'([a-zA-Z0-9_]+)\s*:\s*(["\'])([\s\S]*?)\2', dict_str):
+                for m in re.finditer(r'([a-zA-Z0-9_]+)\s*:\s*(["\'])([^"\\]*(?:\\.[^"\\]*)*)\2', dict_str):
                     # 将转义的 \\n 恢复为真实的换行，供前端显示
                     sub_dict[m.group(1)] = m.group(3).replace('\\n', '\n')
 
@@ -83,10 +83,20 @@ def get_site_config():
 
                 parsed_config[dict_name] = sub_dict
 
-        # 2. 提取外层基础字符串变量
-        for match in re.finditer(r'([a-zA-Z0-9_]+)\s*:\s*(["\'])([\s\S]*?)\2', root_content):
-            key, _, val = match.groups()
-            parsed_config[key] = val.replace('\\n', '\n')
+        # 2. 🌟 核心升级：提取外层基础变量（现在支持 字符串、布尔值、数字！）
+        for match in re.finditer(r'([a-zA-Z0-9_]+)\s*:\s*(?:(["\'])([^"\\]*(?:\\.[^"\\]*)*)\2|(true|false|\d+))', root_content):
+            key = match.group(1)
+            str_val = match.group(3) # 匹配到的字符串
+            raw_val = match.group(4) # 匹配到的布尔或数字
+
+            if str_val is not None:
+                parsed_config[key] = str_val.replace('\\n', '\n')
+            elif raw_val == 'true':
+                parsed_config[key] = True
+            elif raw_val == 'false':
+                parsed_config[key] = False
+            elif raw_val.isdigit():
+                parsed_config[key] = int(raw_val)
 
         return {"success": True, "data": parsed_config}
     except Exception as e:
@@ -114,10 +124,11 @@ def update_site_config(payload: Dict[str, Any] = Body(...)):
         "picBedToken", "danmakuList", "gitalkConfig", "buildDate", "footerBadges",
         "icpConfig", "geminiConfig",
         "faviconUrl",
-        "navTitle",  # 👈 必须叫这个
-        "navSuffix",  # 👈 必须叫这个
-        "navAfter",  # 👈 必须叫这个
-        "friendLinkApplyFormat"
+        "navTitle",
+        "navSuffix",
+        "navAfter",
+        "friendLinkApplyFormat",
+        "enableLevelSystem" # 👈 你加的字段在这里，完美！
     }
 
     try:
@@ -129,6 +140,7 @@ def update_site_config(payload: Dict[str, Any] = Body(...)):
         updated_count = 0
 
         for key, value in updates.items():
+            print(f"  📝 处理字段 -> [{key}] (type={type(value).__name__})")
 
             # 拦截非白名单字段，彻底防止二次覆写灾难
             if key not in VALID_ROOT_KEYS:
@@ -163,11 +175,11 @@ def update_site_config(payload: Dict[str, Any] = Body(...)):
                 continue
 
             # ================= 原有的通用处理逻辑 =================
-            # 🌟 核心修复：对于字符串，一律使用 json.dumps，它会把换行自动转为代码里的 \n
+            # 🌟 核心修复：这里原本就支持将 bool 转换成 'true' 或 'false' 字符串写入，所以 POST 没问题！
             if isinstance(value, str):
                 val_str = json.dumps(value, ensure_ascii=False)
             elif isinstance(value, bool):
-                val_str = str(value).lower()
+                val_str = str(value).lower() # 👈 这里完美的把 bool 变成了 'true' / 'false'
             elif isinstance(value, dict):
                 val_str = dict_to_ts_string(value, indent=2)
             else:
@@ -178,12 +190,25 @@ def update_site_config(payload: Dict[str, Any] = Body(...)):
             elif isinstance(value, list):
                 pattern = rf"({key}\s*:\s*)\[[\s\S]*?\]"
             else:
-                pattern = rf"({key}\s*:\s*)(['\"`][\s\S]*?['\"`]|true|false|\d+)"
+                # 🌟 修复：匹配到行尾逗号（支持行尾注释），防止嵌套引号导致只替换一半
+                pattern = rf"({key}\s*:\s*)([^,]*)(,\s*(?://[^\n]*)?\s*)$"
 
-            if re.search(pattern, content):
-                content = re.sub(pattern, lambda m: m.group(1) + val_str, content, count=1)
-                print(f"  ✅ 成功修改并落盘 -> [{key}]")
-                updated_count += 1
+            m = re.search(pattern, content, re.MULTILINE if not isinstance(value, (dict, list)) else 0)
+            if m:
+                try:
+                    if isinstance(value, (dict, list)):
+                        new_content = re.sub(pattern, lambda m: m.group(1) + val_str, content, count=1)
+                    else:
+                        new_content = re.sub(pattern, lambda m: m.group(1) + val_str + m.group(3), content, count=1, flags=re.MULTILINE)
+                    content = new_content
+                    print(f"  ✅ 成功修改并落盘 -> [{key}]")
+                    updated_count += 1
+                except Exception as sub_err:
+                    print(f"  ❌ re.sub 失败 -> [{key}]: {sub_err}")
+                    print(f"     val_str 类型: {type(val_str).__name__}, 长度: {len(val_str)}")
+                    print(f"     val_str 前200字符: {repr(val_str[:200])}")
+                    print(f"     匹配到的内容前100字符: {repr(m.group(0)[:100])}")
+                    raise
 
         # 写入物理磁盘
         with open(config_path, 'w', encoding='utf-8') as f:

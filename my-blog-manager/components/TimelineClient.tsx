@@ -4,6 +4,8 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import TimelineNode from './TimelineNode';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, AlertTriangle, Sparkles, LayoutGrid, ListTree, Calendar, Hash, ArrowRight, Edit3, ArrowUp } from 'lucide-react';
+import { toDirectUrl } from '../lib/picbedUtils';
+import { siteConfig } from '../siteConfig';
 import { useToast } from './ToastProvider';
 import Link from 'next/link';
 
@@ -272,7 +274,7 @@ export default function TimelineClient({ posts: initialPosts, tags }: { posts: a
                       {/* 🌟 核心修正：点击卡片主体，跳转到前台阅读页面 (/posts/xxx) */}
                       <Link href={`/posts/${post.slug}`} className="block flex-1 flex flex-col cursor-pointer">
                         <div className="relative h-40 overflow-hidden">
-                          <img src={post.cover} alt={post.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                          <img src={toDirectUrl(post.cover, (siteConfig as any).picBedUrl)} alt={post.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                           <span className="absolute bottom-3 left-4 text-white/90 text-xs font-mono font-bold bg-black/40 backdrop-blur-sm px-2 py-1 rounded-md">
                             {post.date.split(' ')[0]}

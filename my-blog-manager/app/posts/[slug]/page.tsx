@@ -2,16 +2,18 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import Link from 'next/link';
+import { toDirectUrl } from '../../../lib/picbedUtils';
 
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm'; // 🌟 核心引入：支持删除线和表格等 GFM 语法
 import remarkRehype from 'remark-rehype';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
-// 引入高亮主题 (虽然我们下面硬核注入了，但保留作为兜底)
+// 引入高亮主题
 import 'highlight.js/styles/atom-one-dark.css';
 
 import Navbar from '../../../components/Navbar';
@@ -53,15 +55,48 @@ function extractToc(content: string) {
 async function getPostData(slug: string) {
   const fullPath = path.join(process.cwd(), 'posts', `${slug}.md`);
   const fileContents = fs.readFileSync(fullPath, 'utf8');
-  const { data, content } = matter(fileContents);
+  let { data, content } = matter(fileContents);
+
+  // ==========================================
+  // 🌟 前台渲染清洗区：终极防吞换行补丁！
+  // ==========================================
+
+  // 1. 强行修复数字列表缺少空格导致无法渲染为列表的 Bug (1.百度 -> 1. 百度)
+  content = content.replace(/^(\s*\d+)\.([^ \n])/gm, '$1. $2');
+
+  // 2. 🌟 拯救被 Markdown 引擎吞噬的“连续空行”！
+  // 统一换行符，并清理纯空格的废弃空行
+  content = content.replace(/\r\n/g, '\n').replace(/^[ \t]+$/gm, '');
+
+  // 将代码块切开保护，只处理正文的连续空行！
+  const blocks = content.split(/(```[\s\S]*?```)/g);
+  content = blocks.map((block, index) => {
+    // 奇数索引是代码块，原样返回，绝对不碰！
+    if (index % 2 === 1) return block;
+
+    // 偶数索引是正文。把 3 个以上的连续 \n 替换为真实的 <br/> 标签。
+    // （3 个 \n 相当于中间空了 1 行真正的空白）
+    return block.replace(/\n{3,}/g, (match) => {
+      const brCount = match.length - 2;
+      return '\n\n' + '<br/>'.repeat(brCount) + '\n\n';
+    });
+  }).join('');
+
+  // ==========================================
 
   const processedContent = await unified()
     .use(remarkParse)
+    .use(remarkGfm)
     .use(remarkMath)
+    // 🌟 allowDangerousHtml 必须开启，这样上面生成的 <br/> 才能顺利通过变成真正的换行！
     .use(remarkRehype, { allowDangerousHtml: true })
-    // 🌟 核心升级：开启代码语言自动侦测，无视 TS 报错
+    // 🌟 核心升级：开启代码语言自动侦测，并限制白名单，大幅提高 C++ 和常用语言的猜中率！
     // @ts-ignore
-    .use(rehypeHighlight, { detect: true, ignoreMissing: true })
+    .use(rehypeHighlight, {
+      detect: true,
+      ignoreMissing: true,
+      subset: ['cpp', 'c', 'python', 'java', 'javascript', 'typescript', 'go', 'rust', 'bash', 'json', 'html', 'css', 'sql', 'xml']
+    })
     .use(rehypeKatex)
     .use(rehypeStringify, { allowDangerousHtml: true })
     .process(content);
@@ -99,15 +134,13 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
     <div className="min-h-screen relative pb-20">
       <Navbar />
       <PageTransition>
-        {/* 🌟 响应式调整：移动端缩小主容器宽度和顶部间距 */}
         <main className="w-[95%] md:w-[90%] max-w-6xl mx-auto mt-24 md:mt-28 flex flex-col lg:flex-row gap-6 md:gap-8 relative z-10">
 
           <article className="flex-1 bg-white/60 dark:bg-slate-800/50 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/40 dark:border-white/10 overflow-hidden transition-colors duration-700">
             <div className="w-full aspect-video bg-slate-200 dark:bg-slate-700 relative group">
-              <img src={postData.cover} alt="封面" className="w-full h-full object-cover opacity-90 transition-transform duration-1000 group-hover:scale-105" />
+              <img src={toDirectUrl(postData.cover, (siteConfig as any).picBedUrl)} alt="封面" className="w-full h-full object-cover opacity-90 transition-transform duration-1000 group-hover:scale-105" />
             </div>
 
-            {/* 🌟 响应式调整：手机端减小内边距 */}
             <div className="p-5 md:p-12 relative">
               <BackButton />
 
@@ -116,7 +149,6 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
                   {postData.title}
                 </h1>
 
-                {/* ✅ 你要求的特权按钮，绝对原封不动地保留了！ */}
                 <Link
                   href={`/editor?id=${postData.slug}&type=post`}
                   className="absolute top-0 right-0 p-2.5 md:p-3 rounded-xl md:rounded-2xl bg-white/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-indigo-500 hover:text-white transition-all shadow-sm border border-slate-200 dark:border-slate-700 group flex items-center gap-2 active:scale-95 z-50"
@@ -141,14 +173,45 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
 
               <div className="relative">
                 <style>{`
-                  /* 1. 默认状态（手机端：精致小巧） */
                   .prose h1 { font-size: 1.8rem !important; font-weight: 900 !important; margin-bottom: 1.2rem !important; margin-top: 2rem !important; line-height: 1.3 !important; color: inherit !important; }
                   .prose h2 { font-size: 1.5rem !important; font-weight: 800 !important; margin-bottom: 1rem !important; margin-top: 1.5rem !important; color: inherit !important; }
                   .prose h3 { font-size: 1.2rem !important; font-weight: 700 !important; margin-bottom: 0.8rem !important; color: inherit !important; }
                   .prose p { font-size: 0.95rem !important; line-height: 1.75 !important; color: inherit !important; }
-                  .prose ul, .prose ol { padding-left: 1.2rem !important; font-size: 0.95rem !important; }
                   
-                  /* 代码块结构调整 */
+                  .prose a { color: #6366f1 !important; text-decoration: none !important; font-weight: 600 !important; border-bottom: 1px dashed #6366f1 !important; transition: all 0.3s ease !important; }
+                  .prose a:hover { color: #4f46e5 !important; border-bottom-style: solid !important; background-color: rgba(99, 102, 241, 0.1) !important; padding: 0 0.2rem !important; border-radius: 0.2rem !important; }
+                  .dark .prose a { color: #818cf8 !important; border-bottom-color: #818cf8 !important; }
+                  .dark .prose a:hover { color: #a5b4fc !important; background-color: rgba(129, 140, 248, 0.15) !important; }
+
+                  .prose ul { list-style-type: disc !important; padding-left: 1.5rem !important; font-size: 0.95rem !important; }
+                  .prose ol { list-style-type: decimal !important; padding-left: 1.5rem !important; font-size: 0.95rem !important; }
+                  .prose li { display: list-item !important; margin-bottom: 0.5rem !important; }
+                  
+                  .prose ul ul, .prose ol ul { list-style-type: circle !important; margin-top: 0.25rem !important; margin-bottom: 0.25rem !important; }
+                  .prose ol ol, .prose ul ol { list-style-type: lower-alpha !important; margin-top: 0.25rem !important; margin-bottom: 0.25rem !important; }
+                  
+                  .prose del { text-decoration-color: inherit !important; opacity: 0.6; }
+                  
+                  /* 🌟 引用块专属果冻极客风样式补丁 */
+                  .prose blockquote {
+                    border-left: 4px solid #6366f1 !important;
+                    background-color: rgba(99, 102, 241, 0.05) !important;
+                    padding: 1rem 1.5rem !important;
+                    margin: 1.5rem 0 !important;
+                    border-radius: 0 1.25rem 1.25rem 0 !important;
+                    font-style: italic !important;
+                    color: #64748b !important;
+                  }
+                  .prose blockquote p {
+                    margin: 0 !important; 
+                    color: inherit !important;
+                  }
+                  .dark .prose blockquote {
+                    border-left-color: #818cf8 !important;
+                    background-color: rgba(129, 140, 248, 0.1) !important;
+                    color: #94a3b8 !important;
+                  }
+                  
                   .prose pre {
                     background-color: #282c34 !important; color: #abb2bf !important;
                     padding: 1rem !important; border-radius: 0.75rem !important;
@@ -156,7 +219,6 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
                     margin-top: 1rem !important; margin-bottom: 1rem !important;
                   }
                   
-                  /* 🌟 顶级极客字体链注入，极致圆润，带代码连字特效！ */
                   .prose pre code, .prose p code, .prose li code { 
                     font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, ui-monospace, monospace !important; 
                     font-variant-ligatures: contextual !important; 
@@ -173,23 +235,24 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
                   .dark .prose p code, .dark .prose li code { background-color: rgba(99, 102, 241, 0.2) !important; color: #818cf8 !important; }
                   .prose img { display: block !important; margin: 1.5rem auto !important; border-radius: 1rem !important; box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important; max-width: 100% !important; height: auto !important; }
 
-                  /* 🌟 Atom One Dark 极客主题硬核注入！ */
                   .prose pre code .hljs-comment, .prose pre code .hljs-quote { color: #5c6370 !important; font-style: italic !important; }
                   .prose pre code .hljs-doctag, .prose pre code .hljs-keyword, .prose pre code .hljs-formula { color: #c678dd !important; }
+                  .prose pre code .hljs-keyword.type_, .prose pre code .hljs-type { color: #c678dd !important; } 
                   .prose pre code .hljs-section, .prose pre code .hljs-name, .prose pre code .hljs-selector-tag, .prose pre code .hljs-deletion, .prose pre code .hljs-subst { color: #e06c75 !important; }
                   .prose pre code .hljs-literal { color: #56b6c2 !important; }
                   .prose pre code .hljs-string, .prose pre code .hljs-regexp, .prose pre code .hljs-addition, .prose pre code .hljs-attribute, .prose pre code .hljs-meta-string { color: #98c379 !important; }
-                  .prose pre code .hljs-built_in, .prose pre code .hljs-class .hljs-title { color: #e6c07b !important; }
-                  .prose pre code .hljs-attr, .prose pre code .hljs-variable, .prose pre code .hljs-template-variable, .prose pre code .hljs-type, .prose pre code .hljs-selector-class, .prose pre code .hljs-selector-attr, .prose pre code .hljs-selector-pseudo, .prose pre code .hljs-number { color: #d19a66 !important; }
-                  .prose pre code .hljs-symbol, .prose pre code .hljs-bullet, .prose pre code .hljs-link, .prose pre code .hljs-meta, .prose pre code .hljs-selector-id, .prose pre code .hljs-title { color: #61aeee !important; }
+                  .prose pre code .hljs-built_in, .prose pre code .hljs-class .hljs-title, .prose pre code .hljs-title.class_ { color: #e6c07b !important; } 
+                  .prose pre code .hljs-attr, .prose pre code .hljs-variable, .prose pre code .hljs-template-variable, .prose pre code .hljs-selector-class, .prose pre code .hljs-selector-attr, .prose pre code .hljs-selector-pseudo, .prose pre code .hljs-number { color: #d19a66 !important; }
+                  .prose pre code .hljs-symbol, .prose pre code .hljs-bullet, .prose pre code .hljs-link, .prose pre code .hljs-meta, .prose pre code .hljs-selector-id, .prose pre code .hljs-title, .prose pre code .hljs-title.function_ { color: #61aeee !important; } 
 
-                  /* 2. 平板与桌面端状态 */
                   @media (min-width: 768px) {
                     .prose h1 { font-size: 3rem !important; font-weight: 950 !important; margin-bottom: 2rem !important; margin-top: 3rem !important; line-height: 1.1 !important; }
                     .prose h2 { font-size: 2.2rem !important; margin-bottom: 1.5rem !important; margin-top: 2rem !important; }
                     .prose h3 { font-size: 1.5rem !important; margin-bottom: 1rem !important; }
                     .prose p { font-size: 1.15rem !important; line-height: 1.85 !important; }
-                    .prose ul, .prose ol { padding-left: 1.5rem !important; font-size: 1.1rem !important; }
+                    
+                    .prose ul, .prose ol { padding-left: 2rem !important; font-size: 1.1rem !important; }
+                    
                     .prose pre { padding: 1.25rem !important; margin-top: 1.5rem !important; margin-bottom: 1.5rem !important; }
                     .prose pre code { font-size: 0.9em !important; }
                     .prose p code, .prose li code { padding: 0.2rem 0.4rem !important; font-size: 0.9em !important; border-radius: 0.375rem !important;}
@@ -197,7 +260,6 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
                   }
                 `}</style>
 
-                {/* 🌟 核心：移动端使用 prose-base，电脑端使用 prose-lg */}
                 <div
                   id="article-content"
                   className="prose prose-slate dark:prose-invert prose-base md:prose-lg max-w-none text-slate-800 dark:text-slate-200 transition-colors duration-700 scroll-smooth"

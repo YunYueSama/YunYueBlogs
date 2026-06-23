@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-// 🌟 引入你的图床工具组件 (请根据你实际的文件夹层级调整相对路径，比如 ../editor/FloatingImageTool)
+// 🌟 引入你的图床工具组件 (请根据你实际的文件夹层级调整相对路径)
 import FloatingImageTool from '../editor/FloatingImageTool';
+import { toDirectUrl } from '../../lib/picbedUtils';
+import { siteConfig } from '../../siteConfig';
 
 export default function ProfileSection({ formData, handleUpdate, pushToQueue }: any) {
   // 🌟 终极防崩溃兜底
@@ -50,7 +52,7 @@ export default function ProfileSection({ formData, handleUpdate, pushToQueue }: 
           {/* 左侧：头像预览区域 */}
           <div className="relative group shrink-0 self-center md:self-start flex flex-col items-center gap-4">
             <motion.div whileHover={{ rotate: 0, scale: 1.05 }} className="w-40 h-40 rounded-[32px] p-1.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-2xl rotate-6 transition-all duration-500">
-              <img src={safeData.avatarUrl || ''} alt="Avatar" className="w-full h-full rounded-[26px] object-cover bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-800" />
+              <img src={toDirectUrl(safeData.avatarUrl || '', (siteConfig as any).picBedUrl)} alt="Avatar" className="w-full h-full rounded-[26px] object-cover bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-800" />
             </motion.div>
           </div>
 
@@ -89,7 +91,7 @@ export default function ProfileSection({ formData, handleUpdate, pushToQueue }: 
               <div className="col-span-1 md:col-span-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex justify-between">
                   <span>网页标签小图标 (Favicon)</span>
-                  {safeData.faviconUrl && <img src={safeData.faviconUrl} alt="favicon" className="w-4 h-4 rounded-full object-cover" />}
+                  {safeData.faviconUrl && <img src={toDirectUrl(safeData.faviconUrl, (siteConfig as any).picBedUrl)} alt="favicon" className="w-4 h-4 rounded-full object-cover" />}
                 </label>
                 <div className="flex gap-2 mt-1">
                   <input type="text" value={safeData.faviconUrl || ''} onChange={e => handleUpdate('faviconUrl', e.target.value)} className="flex-1 bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -147,7 +149,28 @@ export default function ProfileSection({ formData, handleUpdate, pushToQueue }: 
                 </div>
               </div>
 
-              {/* 👇 🌟 新增：友链申请模板配置区域 */}
+              {/* 👇 🌟 新增：系统功能开关区域 */}
+              <div className="col-span-1 md:col-span-2 pt-4 border-t border-slate-200 dark:border-slate-700/50">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block">⚙️ 系统功能开关</label>
+
+                <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200">RPG 等级展示系统 (Level System)</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">开启后将在“创意工坊”与“帝江号”显示全图鉴成就徽章与经验值档案板</span>
+                  </div>
+
+                  {/* 滑动开关 Toggle */}
+                  <button
+                    onClick={() => handleUpdate('enableLevelSystem', !safeData.enableLevelSystem)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${safeData.enableLevelSystem ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  >
+                    <span className="sr-only">Toggle Level System</span>
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${safeData.enableLevelSystem ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 👇 友链申请模板配置区域 */}
               <div className="col-span-1 md:col-span-2 pt-4 border-t border-slate-200 dark:border-slate-700/50">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1">友链申请模板 (friendLinkApplyFormat)</label>
                 <textarea

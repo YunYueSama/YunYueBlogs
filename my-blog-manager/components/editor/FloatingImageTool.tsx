@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../ToastProvider';
+import { toDirectUrl } from '../../lib/picbedUtils';
 import { siteConfig } from '../../siteConfig';
 
 interface FloatingImageToolProps {
@@ -73,10 +74,12 @@ export default function FloatingImageTool({ isOpen, onClose, onInsert }: Floatin
       showToast("请输入有效的图片 URL", "warning");
       return;
     }
-    if (!externalUrl.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$|^data:image/i)) {
+    const picBedBase = (siteConfig as any).picBedUrl;
+    const convertedUrl = toDirectUrl(externalUrl.trim(), picBedBase);
+    if (!convertedUrl.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$|^data:image/i)) {
         showToast("这似乎不是一个标准的图片链接，但仍尝试预览", "warning");
     }
-    setUploadedUrl(externalUrl);
+    setUploadedUrl(convertedUrl);
     showToast("预览已生成", "success");
   };
 

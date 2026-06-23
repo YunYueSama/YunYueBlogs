@@ -53,6 +53,7 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
 
+  // 🌟 这里新增了 /tree 路由
   const navLinks = [
     { name: '首页', href: '/' },
     { name: '项目', href: '/projects' },
@@ -61,6 +62,7 @@ export default function Navbar() {
     { name: '音乐', href: '/music' },
     { name: '说说', href: '/moments' },
     { name: '杂谈', href: '/chatter' },
+    { name: '🌳 灵境', href: '/tree' }, // <--- 新增的入口在这里喵！
     { name: '📝 草稿箱', href: '/drafts' },
     { name: '友链', href: '/friends' },
     { name: '关于', href: '/about' },
@@ -118,7 +120,6 @@ export default function Navbar() {
               apiUrl = `${apiBase}/api/config/update`;
               body = { updates: op.payload };
               break;
-            // 🌟 这是关键匹配逻辑
             case 'create_moment':
               apiUrl = `${apiBase}/api/moments/save`;
               body = op.payload;
@@ -153,7 +154,6 @@ export default function Navbar() {
         }, 2000);
 
       } catch (error: any) {
-        // 如果断网或报错，这里会强制提示
         showToast(`后端连接异常: ${error.message}`, "error");
       }
     };
@@ -205,7 +205,7 @@ export default function Navbar() {
             {siteConfig.navAfter}
           </Link>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <nav className="hidden lg:flex gap-8 text-sm font-bold">
               {navLinks.map((link) => (
                 <Link key={link.href} href={link.href} className={`relative py-1 transition-colors ${pathname === link.href ? 'text-indigo-600' : 'text-slate-700 dark:text-slate-200'}`}>

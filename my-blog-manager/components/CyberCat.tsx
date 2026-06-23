@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function CyberCat() {
@@ -9,6 +9,13 @@ export default function CyberCat() {
   const [showInput, setShowInput] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+
+  // 拖动相关状态
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const positionRef = useRef({ x: 0, y: 0 });
+  const hasMovedRef = useRef(false);
 
   const chatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -21,8 +28,46 @@ export default function CyberCat() {
     }, duration);
   };
 
+  // --- 🖱️ 拖动功能 - 只在猫咪图片上触发 ---
+  const handleCatMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    setIsDragging(true);
+    hasMovedRef.current = false;
+    dragStartRef.current = {
+      x: e.clientX - positionRef.current.x,
+      y: e.clientY - positionRef.current.y,
+    };
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const newX = e.clientX - dragStartRef.current.x;
+    const newY = e.clientY - dragStartRef.current.y;
+    positionRef.current = { x: newX, y: newY };
+    setPosition({ x: newX, y: newY });
+    hasMovedRef.current = true;
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
   // --- 🖱️ 交互事件：摸猫猫 ---
   const handlePetCat = () => {
+    if (hasMovedRef.current) return; // 如果刚拖动过，不触发摸猫
     if (isPetted) return;
     setIsPetted(true);
     speak("呼噜噜... 摸得本喵很舒服喵~", 2000);
@@ -33,10 +78,10 @@ export default function CyberCat() {
 
   // --- 🐟 交互事件：喂小鱼干 ---
   const handleFeed = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止触发摸猫或拖拽
+    e.stopPropagation();
     if (isThinking) return;
 
-    setShowInput(false); // 喂食时关掉输入框
+    setShowInput(false);
     setIsThinking(true);
     speak("嗷呜！真好吃喵！本喵吃饱了要说两句...", 6000);
 
@@ -108,12 +153,16 @@ export default function CyberCat() {
 
 
   return (
-    <motion.div
-      drag
-      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      dragElastic={0.1}
-      whileDrag={{ scale: 1.1, cursor: "grabbing" }}
-      className="fixed bottom-20 right-20 z-[9999] flex flex-col items-center group cursor-grab active:cursor-grabbing"
+    <div
+      style={{
+        position: 'fixed',
+        right: 20,
+        bottom: 20,
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        zIndex: 9999,
+        userSelect: 'none',
+      }}
+      className="flex flex-col items-center"
     >
       {/* 💬 聊天气泡 */}
       <div className="relative w-full flex justify-center mb-6">
@@ -136,7 +185,7 @@ export default function CyberCat() {
       {/* 🐈 猫咪本体 & 交互按钮区 */}
       <div className="relative">
 
-        {/* 🌟 核心修改区：去掉了 opacity-0 和 group-hover，让按钮常驻显示 */}
+        {/* 🌟 按钮区 - 在猫咪左侧 */}
         <div className="absolute -left-12 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20">
 
             {/* 💬 聊天按钮 */}
@@ -145,8 +194,7 @@ export default function CyberCat() {
                  e.stopPropagation();
                  setShowInput(!showInput);
               }}
-              // 稍微加了一点半透明背景，让常驻按钮在深色背景下也好看
-              className="bg-white/90 dark:bg-slate-700/90 p-2.5 rounded-full shadow-md hover:scale-110 active:scale-95 transition-transform border border-gray-100 dark:border-slate-600 text-blue-500 hover:text-blue-600 flex items-center justify-center backdrop-blur-sm"
+              className="bg-white/90 dark:bg-slate-700/90 p-2.5 rounded-full shadow-md hover:scale-110 active:scale-95 transition-transform border border-gray-100 dark:border-slate-600 text-blue-500 hover:text-blue-600 flex items-center justify-center backdrop-blur-sm cursor-pointer"
               title="聊天"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -158,38 +206,39 @@ export default function CyberCat() {
             <button
               onClick={handleFeed}
               disabled={isThinking}
-              className={`bg-white/90 dark:bg-slate-700/90 p-2.5 rounded-full shadow-md hover:scale-110 active:scale-95 transition-transform border border-gray-100 dark:border-slate-600 flex items-center justify-center backdrop-blur-sm ${isThinking ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`bg-white/90 dark:bg-slate-700/90 p-2.5 rounded-full shadow-md hover:scale-110 active:scale-95 transition-transform border border-gray-100 dark:border-slate-600 flex items-center justify-center backdrop-blur-sm cursor-pointer ${isThinking ? 'opacity-50 cursor-not-allowed' : ''}`}
               title="喂小鱼干"
             >
               <span className="text-xl leading-none">🐟</span>
             </button>
         </div>
 
-        {/* 猫咪图片容器 */}
+        {/* 猫咪图片容器 - 只在这里处理拖动 */}
         <div
-          className="w-[120px] h-[120px] relative cursor-pointer"
+          className="w-[120px] h-[120px] relative cursor-grab active:cursor-grabbing"
+          onMouseDown={handleCatMouseDown}
           onClick={handlePetCat}
         >
           <style>{`
             .cat-sprite {
               width: 100%;
               height: 100%;
-              background-image: url('/siamese-cat.png'); 
-              background-size: 300% 300%; 
+              background-image: url('/siamese-cat.png');
+              background-size: 300% 300%;
               background-repeat: no-repeat;
-              image-rendering: pixelated; 
+              image-rendering: pixelated;
             }
             .cat-idle {
               animation: idle-frames 1.2s infinite;
-              background-position-y: 0%; 
+              background-position-y: 0%;
             }
             .cat-petted {
               animation: pet-frames 0.8s infinite;
-              background-position-y: 50%; 
+              background-position-y: 50%;
             }
             .cat-thinking {
               animation: idle-frames 0.6s infinite;
-              background-position-y: 0%; 
+              background-position-y: 0%;
             }
             @keyframes idle-frames {
               0%, 33.32% { background-position-x: 0%; }
@@ -214,6 +263,7 @@ export default function CyberCat() {
             exit={{ opacity: 0, y: -10, scale: 0.9 }}
             onSubmit={handleChatSubmit}
             className="absolute -bottom-14 bg-white dark:bg-slate-800 p-1.5 rounded-full shadow-lg flex items-center border border-gray-200 dark:border-slate-700 w-56 z-20"
+            onClick={(e) => e.stopPropagation()}
           >
             <input
               type="text"
@@ -227,7 +277,7 @@ export default function CyberCat() {
             <button
               type="submit"
               disabled={isThinking || !inputValue.trim()}
-              className={`rounded-full p-1.5 ml-1 flex items-center justify-center transition-colors ${
+              className={`rounded-full p-1.5 ml-1 flex items-center justify-center transition-colors cursor-pointer ${
                 isThinking || !inputValue.trim() ? 'bg-gray-300 text-gray-500' : 'bg-blue-500 hover:bg-blue-600 text-white'
               }`}
             >
@@ -238,6 +288,6 @@ export default function CyberCat() {
           </motion.form>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }

@@ -1,8 +1,10 @@
-# 🌟 Welcome to XHBlogs!
+# 🌟 Welcome to YunYueBlogs!
+
+> **Fork Declaration**: This project is a secondary development based on [XinghuisamaBlogs](https://github.com/heiehiehi/XinghuisamaBlogs). Thanks to the original author for the open-source contribution!
 
 This is a personal blog system built with Next.js, featuring a Glassmorphism design. This project includes a frontend display and an independent local backend console. It supports Markdown writing, draft management, and image hosting configuration.
 
-This guide will take you from scratch to deploy and use XHBlogs.
+This guide will take you from scratch to deploy and use YunYueBlogs.
 
 ---
 
@@ -62,7 +64,7 @@ Step 1: Obtain the lossless updater (only required for the first time)
 
 #### 1. Download the update.bat and update.py files from the project's root directory.
 
-#### 2. Move the downloaded update.bat and update.py to the outermost root directory of your local blog project (i.e., alongside the my-blog-manager and XHBlogs folders).
+#### 2. Move the downloaded update.bat and update.py to the outermost root directory of your local blog project (i.e., alongside the my-blog-manager and YunYueBlog folders).
 
 As shown below:
 
@@ -97,7 +99,7 @@ Set email (must be the email associated with your GitHub)
 `git config --global user.email "your_email_linked_to_github@example.com"`
 
 > **Step 2: Initialize Local Repository**
-> Enter your project folder and execute the following CMD commands: (the frontend deployment folder, which is XHBlogs here)
+> Enter your project folder and execute the following CMD commands: (the frontend deployment folder, which is YunYueBlog here)
 
 1. Initialize Git repository to generate the hidden .git folder
 `git init`
@@ -108,11 +110,11 @@ Set email (must be the email associated with your GitHub)
 
 **1. Configure Local Physical Path**
 Open the "Settings" page in the console.
-The pulled source code contains two core folders: `XHBlogs-manager` and `XHBlogs`. Please specify the local physical path of `XHBlogs` in the console.
+The pulled source code contains two core folders: `my-blog-manager` and `YunYueBlog`. Please specify the local physical path of `YunYueBlog` in the console.
 
 ![选择物理路径](picture/Pasted%20image%2020260427111646.png)
 
-Example: `F:\Test2\XHBlogs`
+Example: `F:\Test2\YunYueBlog`
 
 ![填入本地BLOG物理路径](picture/Pasted%20image%2020260427112311.png)
 
@@ -140,7 +142,7 @@ Go to your GitHub repository page and navigate to the `Settings` -> `Deploy keys
 
 ![Deploy Keys](picture/Pasted%20image%2020260427113705.png)
 
-Paste the copied key into the `Key` box. The `Title` can be anything (e.g., `XHBlogs-Deploy-Key`).
+Paste the copied key into the `Key` box. The `Title` can be anything (e.g., `YunYueBlogs-Deploy-Key`).
 
 > **🚨 Critical Warning**: The **Allow write access** option below MUST be checked!
 > After setting it up, click **Add key** to save.
@@ -171,7 +173,7 @@ Click `Add New...` to add a new Project, and select the repository you just push
 
 ![导入项目](picture/Pasted%20image%2020260427121939.png)
 
-For example, I selected `XHBlogS2`:
+For example, I selected `YunYueBlog`:
 
 ![选择项目](picture/Pasted%20image%2020260427122034.png)
 
@@ -368,7 +370,7 @@ Copy and paste this ID into the search box in the console to add the song to you
 
 ## Conclusion
 
-XHBlogs has detailed features waiting to be explored during actual use. This project aims to provide an out-of-the-box frontend static display and backend management solution. If you are a developer and feel the console operations can be optimized, you can do secondary development based on the Next.js source code, or write Markdown manually for deployment!
+YunYueBlogs has detailed features waiting to be explored during actual use. This project aims to provide an out-of-the-box frontend static display and backend management solution. If you are a developer and feel the console operations can be optimized, you can do secondary development based on the Next.js source code, or write Markdown manually for deployment!
 
 **If you find this project helpful, please give me a ⭐ Star on GitHub! Every star is a driving force for continued maintenance and updates. Thank you!**
 

@@ -200,6 +200,7 @@ async def sync_source_to_vercel(request: Request):
     try:
         payload = await request.json()
         blog_path = payload.get("blogPath", "").strip()
+        commit_message = payload.get("commitMessage", "").strip() or "Auto sync source code for Vercel 🚀"
 
         # 读取配置
         if not os.path.exists(CONFIG_FILE):
@@ -219,9 +220,14 @@ async def sync_source_to_vercel(request: Request):
         # 1. 添加所有代码改动
         subprocess.run(["git", "add", "."], check=True)
 
-        # 2. 提交代码 (这里加入容错)
-        commit_cmd = 'git commit -m "Auto sync source code for Vercel 🚀" || echo "No changes to commit"'
-        subprocess.run(commit_cmd, shell=True, capture_output=True)
+        # 2. 提交代码 (使用列表参数避免 shell 转义问题)
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            capture_output=True, text=True, encoding="utf-8"
+        )
+        # 没有改动时不报错（可能已经是最新的）
+        if commit_result.returncode != 0 and "nothing to commit" not in commit_result.stdout:
+            pass  # 容错，继续尝试 push
 
         # 🌟 终极杀招：强行绑定 B 线专属私钥，无视 Windows 智障路由！
         ssh_dir = os.path.expanduser("~/.ssh")

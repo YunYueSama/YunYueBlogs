@@ -15,6 +15,7 @@ export default function RepoSection() {
   const [isUploading, setIsUploading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -158,7 +159,7 @@ export default function RepoSection() {
       const res = await fetch(`http://127.0.0.1:${configData.api_port}/api/deploy/source`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blogPath: deployData.blogPath })
+        body: JSON.stringify({ blogPath: deployData.blogPath, commitMessage })
       });
       const data = await res.json();
       if (data.success) showToast("✅ 源码上传成功！Vercel 即将开始自动构建", "success");
@@ -352,9 +353,19 @@ export default function RepoSection() {
                     <>
                         <div className="w-16 h-16 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6"><CloudUpload className="text-blue-500" size={32} /></div>
                         <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">同步源码至 Vercel？</h3>
-                        <p className="text-sm text-slate-500 mb-8 leading-relaxed">将本地源代码提交，并推送到你在 B 线配置的源码仓库，自动触发 Vercel 构建。</p>
+                        <p className="text-sm text-slate-500 mb-4 leading-relaxed">将本地源代码提交，并推送到你在 B 线配置的源码仓库，自动触发 Vercel 构建。</p>
+                        <div className="mb-6">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1.5 block">提交信息</label>
+                            <input
+                                type="text"
+                                value={commitMessage}
+                                onChange={(e) => setCommitMessage(e.target.value)}
+                                className="w-full bg-white dark:bg-slate-800 border border-blue-200/50 dark:border-blue-700/50 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="留空则使用默认: Auto sync source code for Vercel 🚀"
+                            />
+                        </div>
                         <div className="flex gap-3">
-                            <button onClick={() => setModalConfig({isOpen: false, type: null})} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl text-xs font-black transition-colors hover:bg-slate-200">取消</button>
+                            <button onClick={() => setModalConfig({isOpen: false, type: null})} className="flex-1 py-4 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs font-black transition-colors hover:bg-emerald-200 dark:hover:bg-emerald-900/50">取消</button>
                             <button onClick={executeUploadSource} className="flex-1 py-4 bg-blue-500 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-500/30 active:scale-95 transition-all">开始同步</button>
                         </div>
                     </>

@@ -1,3 +1,39 @@
+# 博客前端（独立仓库）
+YunYueBlog/
+
+# 本地任务规划文件
+task_plan.md
+findings.md
+progress.md
+.planning/
+
+# 管理端内容数据（控制台生成，不随代码提交）
+my-blog-manager/posts/
+my-blog-manager/chatters/
+my-blog-manager/moments/
+my-blog-manager/data/albums.ts
+my-blog-manager/data/friends.ts
+my-blog-manager/data/projects.ts
+
+# 管理端本地运行/部署配置
+my-blog-manager/window_config.json
+my-blog-manager/data/deploy_config.json
+my-blog-manager/public/backend_config.json
+
+# 管理端依赖和构建产物
+my-blog-manager/node_modules/
+my-blog-manager/.next/
+my-blog-manager/out/
+my-blog-manager/dist/
+
+# 环境变量
+.env
+.env.*
+!.env.example
+my-blog-manager/.env
+my-blog-manager/.env.*
+!my-blog-manager/.env.example
+
 # Claude 配置
 .claude/
 

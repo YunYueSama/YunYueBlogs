@@ -156,9 +156,9 @@ export default function CyberCat() {
     <div
       style={{
         position: 'fixed',
-        right: 20,
-        bottom: 20,
-        transform: `translate(${position.x}px, ${position.y}px)`,
+        left: 40,
+        top: '50%',
+        transform: `translate(${position.x}px, calc(-50% + ${position.y}px))`,
         zIndex: 9999,
         userSelect: 'none',
       }}

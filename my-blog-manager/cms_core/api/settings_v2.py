@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -21,6 +22,7 @@ from cms_core.music_library import (
     save_library,
     summarize_track,
 )
+from cms_core.music_validation import validate_track
 from cms_core.workspace import CONFIG_ROOT, DATA_ROOT, ensure_workspace, read_json, write_json_atomic
 
 router = APIRouter()
@@ -213,6 +215,23 @@ def save_music_settings(payload: MusicSettings):
     site = read_json(DATA_ROOT / "site.json", None)
     if site is None:
         return fail("settings_missing", "公开站点配置尚未初始化。", 404)
+    unavailable: list[str] = []
+    try:
+        for track in payload.musicTracks:
+            validation = validate_track(
+                source=track.source,
+                track_id=track.id,
+                name=track.name,
+                artist=track.artist,
+            )
+            if not validation.get("available"):
+                unavailable.append(track.name.strip() or track.id)
+    except (httpx.HTTPError, OSError, ValueError, TypeError):
+        return fail("music_validation_unavailable", "音源检查服务暂时不可用，未保存播放列表。", 503)
+    if unavailable:
+        names = "、".join(unavailable[:3])
+        suffix = "等歌曲" if len(unavailable) > 3 else ""
+        return fail("music_tracks_unavailable", f"{names}{suffix} 当前没有可用音源，请移除或更换版本后再保存。", 422)
     site["musicIds"] = payload.musicIds
     site["musicTracks"] = [track.model_dump() for track in payload.musicTracks]
     write_json_atomic(DATA_ROOT / "site.json", site)

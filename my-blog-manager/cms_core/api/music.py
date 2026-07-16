@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Path, Query
 from fastapi.responses import JSONResponse
 
 from cms_core import kugou
+from cms_core.music_validation import validate_track
 
 router = APIRouter()
 MUSIC_HEADERS = {
@@ -88,6 +89,29 @@ def query_lyric_status(
 @router.get("/kugou/{song_hash}/status")
 def query_kugou_status(song_hash: Annotated[str, Path(pattern=r"^[A-Fa-f0-9]{32}$")]):
     try:
-        return ok(kugou.playback_info(song_hash))
+        return ok(validate_track(source="kugou", track_id=song_hash))
     except (httpx.HTTPError, ValueError, TypeError):
         return fail("kugou_playback_unavailable", "酷狗音频资源暂时不可用，请稍后重试。", 502)
+
+
+@router.get("/playback/{source}/{track_id}/status")
+def query_playback_status(
+    source: Annotated[Literal["netease", "kugou"], Path()],
+    track_id: Annotated[str, Path(min_length=1, max_length=32)],
+    name: Annotated[str, Query(max_length=200)] = "",
+    artist: Annotated[str, Query(max_length=200)] = "",
+    duration_ms: Annotated[int, Query(alias="durationMs", ge=0, le=3_600_000)] = 0,
+    refresh: Annotated[bool, Query()] = False,
+):
+    try:
+        result = validate_track(
+            source=source,
+            track_id=track_id,
+            name=name,
+            artist=artist,
+            duration_ms=duration_ms,
+            force=refresh,
+        )
+        return ok(result)
+    except (httpx.HTTPError, ValueError, TypeError):
+        return fail("music_validation_unavailable", "音源检查服务暂时不可用，请稍后重试。", 502)

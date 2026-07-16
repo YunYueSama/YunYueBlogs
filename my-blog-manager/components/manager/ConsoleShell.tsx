@@ -1,6 +1,6 @@
 'use client';
 
-import { AppWindow, Boxes, ChevronRight, CloudUpload, FileText, Gauge, Image, Menu, Palette, Plug, X } from 'lucide-react';
+import { AppWindow, Boxes, ChevronRight, CloudUpload, FileText, Gauge, Image, Images, Link2, Menu, Music2, Palette, PanelsTopLeft, Plug, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -9,7 +9,11 @@ import OperationQueue from './OperationQueue';
 const navigation = [
   { href: '/admin', label: '概览', icon: Gauge, aliases: ['/admin'] },
   { href: '/content', label: '内容', icon: FileText, aliases: ['/content', '/editor', '/drafts', '/moments'] },
-  { href: '/media', label: '媒体与图床', icon: Image, aliases: ['/media', '/music', '/projects', '/friends', '/photowall'] },
+  { href: '/media', label: '图床', icon: Image, aliases: ['/media'] },
+  { href: '/music', label: '音乐', icon: Music2, aliases: ['/music'] },
+  { href: '/photowall', label: '相册', icon: Images, aliases: ['/photowall'] },
+  { href: '/projects', label: '项目', icon: PanelsTopLeft, aliases: ['/projects'] },
+  { href: '/friends', label: '友链', icon: Link2, aliases: ['/friends'] },
   { href: '/appearance', label: '外观', icon: Palette, aliases: ['/appearance'] },
   { href: '/integrations', label: '集成', icon: Plug, aliases: ['/integrations'] },
   { href: '/publish', label: '发布', icon: CloudUpload, aliases: ['/publish'] },

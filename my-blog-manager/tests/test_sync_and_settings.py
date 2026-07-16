@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from starlette.datastructures import Headers, UploadFile
 
 from cms_core.api import deploy, music, settings_v2, sync
-from cms_core import kugou, music_library
+from cms_core import kugou, music_library, music_validation
 from cms_core.workspace import read_json
 
 
@@ -268,6 +268,52 @@ def test_dual_source_music_settings_migrate_legacy_ids_and_validate_kugou_hash()
     assert [track.key for track in dual.musicTracks] == ["netease:1809646618", "kugou:D89573BA09B50EEE2D3C3DA4F8EA1395"]
     with pytest.raises(ValidationError):
         settings_v2.MusicTrackReference(source="kugou", id="not-a-hash", name="错误")
+
+
+def test_kugou_validation_rejects_track_without_playback_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    music_validation.VALIDATION_CACHE.clear()
+    monkeypatch.setattr(kugou, "playback_info", lambda _song_hash: {
+        "available": False,
+        "reason": "copyright",
+        "name": "久遠寺有珠",
+        "artist": "深澤秀行",
+    })
+
+    result = music_validation.validate_track(
+        source="kugou",
+        track_id="BF25EEA67F30CA66142F51F0AAB9FF3D",
+        name="久遠寺有珠",
+        artist="深澤秀行",
+        force=True,
+    )
+
+    assert result["available"] is False
+    assert result["reason"] == "copyright"
+    assert result["name"] == "久遠寺有珠"
+
+
+def test_music_save_rejects_unplayable_track_before_writing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    data_root = configure_music_workspace(tmp_path, monkeypatch)
+    original = read_json(data_root / "site.json", {})
+    monkeypatch.setattr(settings_v2, "validate_track", lambda **_kwargs: {
+        "available": False,
+        "playbackSource": "kugou",
+        "reason": "copyright_or_region",
+    })
+    payload = settings_v2.MusicSettings(musicTracks=[
+        settings_v2.MusicTrackReference(
+            source="kugou",
+            id="BF25EEA67F30CA66142F51F0AAB9FF3D",
+            name="久遠寺有珠",
+            artist="深澤秀行",
+        ),
+    ])
+
+    response = settings_v2.save_music_settings(payload)
+
+    assert response.status_code == 422
+    assert response_json(response)["error"]["code"] == "music_tracks_unavailable"
+    assert read_json(data_root / "site.json", {}) == original
 
 
 def test_kugou_lyrics_follow_search_download_decode_parse_chain(monkeypatch: pytest.MonkeyPatch) -> None:

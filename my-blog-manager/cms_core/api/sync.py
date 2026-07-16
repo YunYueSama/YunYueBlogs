@@ -1,101 +1,263 @@
+from __future__ import annotations
+
+import hashlib
+import json
 import os
 import shutil
-from fastapi import APIRouter, Request
+import subprocess
+import tempfile
+import threading
+import time
+import uuid
+from pathlib import Path
+from typing import Literal
+
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from cms_core.workspace import CONTENT_ROOT, DATA_ROOT, PLANS_ROOT, ensure_workspace, import_legacy_content, read_json, write_json_atomic
 
 router = APIRouter()
-
-# 动态定位 Manager 根目录
-CURRENT_API_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_API_DIR, "..", ".."))
-
-# 需要镜像覆盖的文件夹 (先清空目标，再全量复制)
-SYNC_DIRS = ["posts", "chatters", "moments"]
-# 需要精确覆盖的单文件
-SYNC_FILES = [
-    "app/about/about.md",
-    "data/albums.ts",
-    "data/friends.ts",
-    "data/projects.ts",
-    "siteConfig.ts"
-]
+MANIFEST_NAME = ".yunyue-managed.json"
+SYNC_LOCK = threading.Lock()
 
 
-def is_safe_blog_dir(target_path):
-    """防呆检测：只有包含 package.json 的才被认为是安全的博客目录"""
-    return os.path.exists(os.path.join(target_path, "package.json"))
+class SyncRequest(BaseModel):
+    blogPath: str = Field(min_length=1)
+
+
+class ApplyRequest(BaseModel):
+    blogPath: str = Field(min_length=1)
+    planId: str = Field(pattern=r"^[a-f0-9]{32}$")
+
+
+def ok(data=None, status_code: int = 200):
+    return JSONResponse({"ok": True, "data": data}, status_code=status_code)
+
+
+def fail(code: str, message: str, status_code: int = 400, details=None):
+    payload = {"ok": False, "error": {"code": code, "message": message}}
+    if details is not None:
+        payload["error"]["details"] = details
+    return JSONResponse(payload, status_code=status_code)
+
+
+def validate_blog_path(raw_path: str) -> tuple[Path | None, str | None]:
+    try:
+        target = Path(raw_path).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None, "目标路径不存在或无法解析。"
+    if not target.is_dir() or not (target / ".git").is_dir():
+        return None, "目标必须是包含 .git 的博客仓库根目录。"
+    package = read_json(target / "package.json", {})
+    marker = read_json(target / ".yunyue-blog.json", {})
+    if package.get("name") != "yunyue-blog" and marker.get("schemaVersion") != 2:
+        return None, "目标缺少 YunYueBlog v2 项目标识。"
+    return target, None
+
+
+def git_changes(target: Path) -> list[str]:
+    paths: set[str] = set()
+    commands = (
+        ["diff", "--name-only", "-z"],
+        ["diff", "--cached", "--name-only", "-z"],
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+    )
+    for arguments in commands:
+        result = subprocess.run(
+            ["git", "-c", "core.quotepath=false", *arguments],
+            cwd=target,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if result.returncode != 0:
+            return ["<git-status-failed>"]
+        paths.update(path.replace("\\", "/") for path in result.stdout.split("\0") if path)
+    return sorted(paths)
+
+
+def managed_destination(target: Path, relative: str) -> Path:
+    relative_path = Path(relative)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError(f"非法受管路径：{relative}")
+    destination = (target / relative_path).resolve()
+    if target not in destination.parents:
+        raise ValueError(f"受管路径超出目标仓库：{relative}")
+    return destination
+
+
+def source_files() -> dict[str, Path]:
+    ensure_workspace()
+    files: dict[str, Path] = {}
+    for folder in ("posts", "chatters", "moments"):
+        for source in sorted((CONTENT_ROOT / folder).glob("*.md")):
+            files[f"{folder}/{source.name}"] = source
+    about = CONTENT_ROOT / "about.md"
+    if about.exists():
+        files["content/about.md"] = about
+    for name in ("albums", "friends", "music", "projects", "site"):
+        source = DATA_ROOT / f"{name}.json"
+        if source.exists():
+            files[f"src/data/{name}.json"] = source
+    return files
+
+
+def digest_files(files: dict[str, Path]) -> str:
+    digest = hashlib.sha256()
+    for relative, source in sorted(files.items()):
+        digest.update(relative.encode("utf-8"))
+        digest.update(hashlib.sha256(source.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def file_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@router.post("/migrate")
+def migrate_workspace():
+    return ok(import_legacy_content())
+
+
+@router.post("/plan")
+def create_sync_plan(payload: SyncRequest):
+    import_legacy_content()
+    target, error = validate_blog_path(payload.blogPath)
+    if error or target is None:
+        return fail("invalid_target", error or "目标路径无效。", 400)
+
+    dirty = git_changes(target)
+    files = source_files()
+    if not files:
+        return fail("empty_workspace", "本地工作区没有可同步内容。", 409)
+
+    previous_manifest = read_json(target / MANIFEST_NAME, {"files": []})
+    previous_files = set(previous_manifest.get("files", []))
+    current_files = set(files)
+    changes = []
+    for relative, source in sorted(files.items()):
+        destination = managed_destination(target, relative)
+        kind: Literal["add", "update", "unchanged"]
+        if not destination.exists():
+            kind = "add"
+        elif file_digest(source) != file_digest(destination):
+            kind = "update"
+        else:
+            kind = "unchanged"
+        changes.append({"kind": kind, "path": relative})
+    for stale in sorted(previous_files - current_files):
+        changes.append({"kind": "delete", "path": stale})
+
+    plan_id = uuid.uuid4().hex
+    plan = {
+        "planId": plan_id,
+        "createdAt": int(time.time()),
+        "target": str(target),
+        "sourceDigest": digest_files(files),
+        "files": sorted(files),
+        "changes": changes,
+        "warnings": ["目标仓库存在未提交改动，应用计划已锁定。"] if dirty else [],
+        "dirtyFiles": dirty,
+        "canApply": not dirty,
+    }
+    write_json_atomic(PLANS_ROOT / f"{plan_id}.json", plan)
+    return ok(plan)
+
+
+@router.post("/apply")
+def apply_sync_plan(payload: ApplyRequest):
+    target, error = validate_blog_path(payload.blogPath)
+    if error or target is None:
+        return fail("invalid_target", error or "目标路径无效。", 400)
+    plan = read_json(PLANS_ROOT / f"{payload.planId}.json", None)
+    if not plan or plan.get("target") != str(target):
+        return fail("plan_not_found", "同步计划不存在或不属于当前仓库。", 404)
+    if not plan.get("canApply"):
+        return fail("dirty_repository", "目标仓库在生成计划时存在未提交改动。", 409, plan.get("dirtyFiles", []))
+    with SYNC_LOCK:
+        if git_changes(target):
+            return fail("repository_changed", "生成计划后目标仓库状态发生变化，请重新预览。", 409)
+
+        files = source_files()
+        if digest_files(files) != plan.get("sourceDigest"):
+            return fail("stale_plan", "本地内容在预览后发生变化，请重新生成同步计划。", 409)
+
+        previous_manifest = read_json(target / MANIFEST_NAME, {"files": []})
+        stale_files = set(previous_manifest.get("files", [])) - set(files)
+        manifest_path = target / MANIFEST_NAME
+        previous_manifest_bytes = manifest_path.read_bytes() if manifest_path.is_file() else None
+
+        try:
+            with tempfile.TemporaryDirectory(prefix=".yunyue-sync-", dir=target) as temporary_root:
+                temporary = Path(temporary_root)
+                staged_root = temporary / "staged"
+                backup_root = temporary / "backup"
+                backed_up: set[str] = set()
+
+                for relative, source in files.items():
+                    staged = staged_root / Path(relative)
+                    staged.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, staged)
+
+                for relative in set(files) | stale_files:
+                    destination = managed_destination(target, relative)
+                    if destination.exists() and not destination.is_file():
+                        raise ValueError(f"受管目标不是普通文件：{relative}")
+                    if destination.is_file():
+                        backup = backup_root / Path(relative)
+                        backup.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(destination, backup)
+                        backed_up.add(relative)
+
+                try:
+                    for relative in files:
+                        destination = managed_destination(target, relative)
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(staged_root / Path(relative), destination)
+                    for relative in stale_files:
+                        stale = managed_destination(target, relative)
+                        if stale.is_file():
+                            stale.unlink()
+
+                    manifest = {
+                        "schemaVersion": 2,
+                        "generatedAt": int(time.time()),
+                        "files": sorted(files),
+                        "deletedFiles": sorted(stale_files),
+                    }
+                    write_json_atomic(manifest_path, manifest)
+                except Exception:
+                    for relative in set(files) | stale_files:
+                        destination = managed_destination(target, relative)
+                        if destination.is_file():
+                            destination.unlink()
+                        if relative in backed_up:
+                            backup = backup_root / Path(relative)
+                            destination.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(backup, destination)
+                    if previous_manifest_bytes is None:
+                        manifest_path.unlink(missing_ok=True)
+                    else:
+                        manifest_path.write_bytes(previous_manifest_bytes)
+                    raise
+        except (OSError, ValueError) as error:
+            return fail("sync_failed", "同步未完成，目标仓库已回滚。", 500, str(error))
+
+    return ok({"planId": payload.planId, "applied": [change for change in plan["changes"] if change["kind"] != "unchanged"], "manifest": MANIFEST_NAME})
 
 
 @router.post("/check")
-async def check_blog_path(request: Request):
-    """检测目标路径是否合法且具备基本结构"""
-    try:
-        payload = await request.json()
-        target_path = payload.get("blogPath", "").strip()
-
-        if not target_path or not os.path.exists(target_path):
-            return {"success": False, "message": "🚫 目标物理路径不存在，请检查输入！"}
-
-        if not is_safe_blog_dir(target_path):
-            return {"success": False,
-                    "message": "⚠️ 危险！目标路径未检测到 package.json，似乎不是一个有效的前端项目，已拦截操作。"}
-
-        missing = []
-        for d in ["posts", "data", "app"]:
-            if not os.path.exists(os.path.join(target_path, d)):
-                missing.append(d)
-
-        if missing:
-            return {"success": True,
-                    "message": f"✅ 路径安全。但目标缺失以下文件夹：{', '.join(missing)}。同步时将自动创建。"}
-
-        return {"success": True, "message": "✅ 路径校验通过，目录结构完美！"}
-    except Exception as e:
-        return {"success": False, "message": f"校验异常: {str(e)}"}
+def check_compat(payload: SyncRequest):
+    target, error = validate_blog_path(payload.blogPath)
+    if error or target is None:
+        return fail("invalid_target", error or "目标路径无效。", 400)
+    return ok({"path": str(target), "dirtyFiles": git_changes(target)})
 
 
 @router.post("/execute")
-async def execute_sync(request: Request):
-    """执行物理覆盖同步"""
-    try:
-        payload = await request.json()
-        target_path = payload.get("blogPath", "").strip()
-
-        if not is_safe_blog_dir(target_path):
-            return {"success": False, "message": "安全拦截：目标路径不合法！"}
-
-        # 1. 同步文件夹 (先彻底删除目标文件夹，再把 Manager 的复制过去)
-        for d in SYNC_DIRS:
-            src_dir = os.path.join(PROJECT_ROOT, d)
-            dst_dir = os.path.join(target_path, d)
-
-            if os.path.exists(src_dir):
-                if os.path.exists(dst_dir):
-                    shutil.rmtree(dst_dir)
-                shutil.copytree(src_dir, dst_dir)
-
-        # 2. 同步单个文件 (直接覆盖或过滤)
-        for f in SYNC_FILES:
-            src_file = os.path.join(PROJECT_ROOT, f.replace("/", os.sep))
-            dst_file = os.path.join(target_path, f.replace("/", os.sep))
-
-            if os.path.exists(src_file):
-                os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-
-                # 🌟 核心过滤逻辑：如果是 siteConfig.ts，拦截并剔除敏感信息
-                if f == "siteConfig.ts":
-                    with open(src_file, "r", encoding="utf-8") as file_in:
-                        lines = file_in.readlines()
-
-                    with open(dst_file, "w", encoding="utf-8") as file_out:
-                        for line in lines:
-                            # 只要这一行包含以下关键词，直接跳过不写入（picBedUrl 保留，用于图片 URL 转换）
-                            if "picBedToken:" in line or "图床核心配置" in line:
-                                continue
-                            file_out.write(line)
-                else:
-                    # 其他普通文件，直接物理拷贝
-                    shutil.copy2(src_file, dst_file)
-
-        return {"success": True, "message": "🎉 完美撒花！所有文章与配置已镜像覆盖至目标博客。"}
-    except Exception as e:
-        return {"success": False, "message": f"同步过程中发生致命错误: {str(e)}"}
+def reject_unsafe_compat():
+    return fail("deprecated_endpoint", "直接覆盖同步已停用，请先调用 /api/sync/plan，再调用 /api/sync/apply。", 410)

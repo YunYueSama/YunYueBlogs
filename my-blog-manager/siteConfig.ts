@@ -47,7 +47,7 @@ export const siteConfig = {
   // 👇 【新增】：图床核心配置 (PicBed Configuration)
   picBedName: "YunYueBlog",
   picBedUrl: "https://tu.majo-elaina.top", // 默认的 Lsky Pro API 地址
-  picBedToken: "imgbed_7b6e23af333786cfa52167fb75cf84e177eb2f94190c1a35fecf37fae427507b", // 留空，等你能在后台填入并覆写
+  picBedToken: "", // 留空，等你能在后台填入并覆写
 
   // 👇 【新增】：全局背景弹幕配置
   danmakuList: ["在干嘛呢？", "有笨蛋嘛？", "前方高能反应！", "GROMACS 跑起来了吗？", "MD 模拟什么时候才能出图啊", "Graph Neural Networks 炼丹中...", "BUG 修复进度 99%", "今天背单词了吗？", "Tailwind CSS 拯救前端", "写算法中", "睡大觉中", "到底在干嘛？"],

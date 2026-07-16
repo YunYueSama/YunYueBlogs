@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local CMS workspace: content, drafts, plans, jobs and secrets
+/workspace/
+/posts/
+/chatters/
+/moments/
+/data/albums.ts
+/data/friends.ts
+/data/projects.ts
+/data/deploy_config.json
+/siteConfig.ts
+/window_config.json
+/public/backend_config.json

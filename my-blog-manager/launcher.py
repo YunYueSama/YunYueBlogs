@@ -16,6 +16,7 @@ import time
 import socket
 import json
 import subprocess
+import shutil
 import traceback
 from cms_core.main import app
 
@@ -70,6 +71,19 @@ def write_port_config(port):
         with open(os.path.join(standalone_public, 'backend_config.json'), 'w', encoding='utf-8') as f:
             json.dump({"api_port": port}, f)
 
+
+def prepare_standalone_assets():
+    standalone_dir = os.path.join(BASE_DIR, '.next', 'standalone')
+    static_source = os.path.join(BASE_DIR, '.next', 'static')
+    static_target = os.path.join(standalone_dir, '.next', 'static')
+    public_source = os.path.join(BASE_DIR, 'public')
+    public_target = os.path.join(standalone_dir, 'public')
+
+    if os.path.isdir(static_source):
+        shutil.copytree(static_source, static_target, dirs_exist_ok=True)
+    if os.path.isdir(public_source):
+        shutil.copytree(public_source, public_target, dirs_exist_ok=True)
+
 def wait_for_port(port, timeout=60):
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -123,7 +137,9 @@ if __name__ == "__main__":
     # 🌟 核心自适应逻辑：判断是“打包运行”还是“开发运行”
     if os.path.exists(server_js):
         print("🚀 [生产模式] 使用 127.0.0.1 强制同步...")
+        prepare_standalone_assets()
         env_vars["HOSTNAME"] = "127.0.0.1"
+        env_vars["YUNYUE_MANAGER_ROOT"] = EXE_DIR
         frontend_process = subprocess.Popen(["node", "server.js"], cwd=standalone_dir, env=env_vars, shell=True)
         window_url = f"http://127.0.0.1:{frontend_port}"
     else:

@@ -1,16 +1,15 @@
 "use client";
 
-import React, { useState, useRef, useEffect, Suspense } from 'react';
+import React, { useCallback, useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Navbar from '../../components/Navbar';
 import RichTextEditor, { RichTextEditorHandle } from '../../components/editor/RichTextEditor';
 import MetaMatrix from '../../components/editor/MetaMatrix';
 import FloatingImageTool from '../../components/editor/FloatingImageTool';
-import PageTransition from '../../components/PageTransition';
 import { ArrowLeft, AlertTriangle, Save, LogOut } from 'lucide-react';
 import { useToast } from '../../components/ToastProvider';
 import { useOperations } from '../../context/OperationContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { managerApi } from '../../lib/managerApi';
 
 // 🌟 核心修改 1：把原本暴露的主函数改名为 EditorContent（不带 export default）
 function EditorContent() {
@@ -19,7 +18,7 @@ function EditorContent() {
   const { showToast } = useToast();
   const { addOperation } = useOperations();
 
-  const [docType, setDocType] = useState<string>(searchParams.get('type') || 'post');
+  const [docType, setDocType] = useState<'post' | 'chatter' | 'about'>((searchParams.get('type') as 'post' | 'chatter' | 'about') || 'post');
   const [currentDocId, setCurrentDocId] = useState(
     searchParams.get('type') === 'about' ? 'about' : (searchParams.get('id') || 'new')
   );
@@ -39,10 +38,12 @@ function EditorContent() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [changeRevision, setChangeRevision] = useState(0);
   const [isImgToolOpen, setIsImgToolOpen] = useState(false);
   const [imgToolTarget, setImgToolTarget] = useState<'editor' | 'cover'>('editor');
 
   const editorRef = useRef<RichTextEditorHandle>(null);
+  const savingRef = useRef(false);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [exitModalOpen, setExitModalOpen] = useState(false);
@@ -51,14 +52,9 @@ function EditorContent() {
     const fetchTags = async () => {
       setIsLoadingTags(true);
       try {
-        const configRes = await fetch(`/backend_config.json`);
-        const config = await configRes.json();
-        const res = await fetch(`http://127.0.0.1:${config.api_port}/api/drafts/all_tags`);
-        const data = await res.json();
-        if (data.success) {
-          setHistoryPostTags(data.postTags || []);
-          setHistoryChatterTags(data.chatterTags || []);
-        }
+        const data = await managerApi<{ postTags: string[]; chatterTags: string[] }>('/api/drafts/all_tags');
+        setHistoryPostTags(data.postTags || []);
+        setHistoryChatterTags(data.chatterTags || []);
       } catch (e) { console.error(e); }
       finally { setIsLoadingTags(false); }
     };
@@ -69,42 +65,36 @@ function EditorContent() {
     if (currentDocId !== 'new') {
       const loadDraft = async () => {
         try {
-          const configRes = await fetch(`/backend_config.json?t=${Date.now()}`);
-          const config = await configRes.json();
-
-          const res = await fetch(`http://127.0.0.1:${config.api_port}/api/drafts/get`, {
+          const data = await managerApi<{ draft: {
+            type?: 'post' | 'chatter' | 'about'; date?: string; title?: string; tags?: string[];
+            cover?: string; description?: string; mood?: string; content?: string;
+          } }>('/api/drafts/get', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: currentDocId, type: docType })
           });
+          if (data.draft.type) setDocType(data.draft.type);
+          setDate(data.draft.date || '');
+          setTitle(data.draft.type === 'about' ? '关于我' : (data.draft.title || ''));
+          setTags(data.draft.tags || []);
+          setCover(data.draft.cover || '');
+          setSummary(data.draft.description || '');
+          setMood(data.draft.mood || '');
+          setContent(data.draft.content || '');
 
-          const data = await res.json();
-          if (data.success) {
-            if (data.draft.type) setDocType(data.draft.type);
-            setDate(data.draft.date || '');
-            setTitle(data.draft.type === 'about' ? '关于我' : (data.draft.title || ''));
-            setTags(data.draft.tags || []);
-            setCover(data.draft.cover || '');
-            setSummary(data.draft.description || '');
-            setMood(data.draft.mood || '');
-            setContent(data.draft.content || '');
-
-            setTimeout(() => setHasUnsavedChanges(false), 500);
-            showToast("✅ 已读取本地源数据", "success");
-          } else {
-             showToast(data.message || "❌ 未找到草稿或原文件", "error");
-          }
-        } catch (e) { showToast("❌ 读取失败", "error"); }
+          setTimeout(() => setHasUnsavedChanges(false), 500);
+          showToast("已读取本地源数据", "success");
+        } catch (error) { showToast(error instanceof Error ? error.message : "读取失败", "error"); }
       };
       loadDraft();
     }
-  }, [currentDocId]);
+  }, [currentDocId, docType, showToast]);
 
   useEffect(() => {
     if (!isLoadingTags) {
       setHasUnsavedChanges(true);
+      setChangeRevision((revision) => revision + 1);
     }
-  }, [title, tags, cover, summary, mood]);
+  }, [title, tags, cover, summary, mood, date, isLoadingTags]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -125,7 +115,38 @@ function EditorContent() {
     }
   };
 
-  const handleSave = async (isPublish: boolean, shouldExitAfterSave: boolean = false) => {
+  const saveDraft = useCallback(async (silent: boolean, shouldExitAfterSave: boolean = false) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+    const payload = {
+      id: docType === 'about' ? 'about' : (currentDocId === 'new' ? null : currentDocId),
+      type: docType, title, tags, cover, mood, description: summary,
+      content: editorRef.current?.getContent() || '',
+      date: date || new Date().toISOString().split('T')[0],
+      published: false,
+    };
+    try {
+      const result = await managerApi<{ id: string; lastModified: number }>('/api/drafts/save', {
+        method: 'POST', body: JSON.stringify(payload)
+      });
+      if (currentDocId === 'new') setCurrentDocId(result.id);
+      setLastSaved(new Date(result.lastModified).toLocaleTimeString());
+      setHasUnsavedChanges(false);
+      if (!silent) showToast("草稿已落盘", "success");
+      if (shouldExitAfterSave) {
+        setExitModalOpen(false);
+        router.back();
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "保存失败", "error");
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  }, [cover, currentDocId, date, docType, mood, router, showToast, summary, tags, title]);
+
+  const handleSave = (isPublish: boolean, shouldExitAfterSave: boolean = false) => {
     if (!title.trim() && docType !== 'about') {
       showToast("⚠️ 请填写标题", "warning"); return;
     }
@@ -140,39 +161,26 @@ function EditorContent() {
     if (isPublish) {
       addOperation({
         id: `publish_${Date.now()}`,
-        type: "publish_article",
+        type: "content_upsert",
         label: `发布: ${title || '无标题'}`,
-        value: payload
+        payload
       });
       setHasUnsavedChanges(false);
       showToast("🚀 已加入待处理队列！", "info");
       if (shouldExitAfterSave) router.back();
       return;
     }
-
-    setIsSaving(true);
-    try {
-      const configRes = await fetch(`/backend_config.json`);
-      const config = await configRes.json();
-      const res = await fetch(`http://127.0.0.1:${config.api_port}/api/drafts/save`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        setLastSaved(new Date().toLocaleTimeString());
-        setHasUnsavedChanges(false);
-        showToast("💾 草稿已落盘", "success");
-        if (shouldExitAfterSave) {
-          setExitModalOpen(false);
-          router.back();
-        }
-      }
-    } catch (e) { showToast("❌ 保存失败", "error"); }
-    finally { setIsSaving(false); }
+    void saveDraft(false, shouldExitAfterSave);
   };
 
+  useEffect(() => {
+    if (!hasUnsavedChanges || isLoadingTags || (!title.trim() && docType !== 'about')) return;
+    const timer = window.setTimeout(() => { void saveDraft(true); }, 4_000);
+    return () => window.clearTimeout(timer);
+  }, [changeRevision, docType, hasUnsavedChanges, isLoadingTags, saveDraft, title]);
+
   return (
-    <div className="h-screen w-screen overflow-hidden relative">
+    <div className="editor-page">
 
       <AnimatePresence>
         {exitModalOpen && (
@@ -203,45 +211,28 @@ function EditorContent() {
         )}
       </AnimatePresence>
 
-      <div className={hasUnsavedChanges ? "relative z-50 [&_a]:pointer-events-none" : "relative z-50"}>
-        {hasUnsavedChanges && (
-          <div className="absolute inset-0 z-50 cursor-pointer" onClick={() => setExitModalOpen(true)}></div>
-        )}
-        <Navbar />
-      </div>
-
-      <PageTransition>
-        <main className="mx-auto w-[96%] max-w-[1750px] flex flex-row gap-6 relative" style={{ marginTop: '144px', height: 'calc(100vh - 144px - 32px)', marginBottom: '32px' }}>
-
-          <button
-            onClick={handleBackClick}
-            className="absolute -top-14 left-2 px-5 py-2.5 bg-white/40 dark:bg-slate-800/60 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-2xl shadow-lg flex items-center gap-2 text-slate-700 dark:text-slate-200 font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all group z-50"
-          >
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform text-indigo-500" />
-            返回上一级
-          </button>
-
-          <section className="flex-1 bg-white/30 dark:bg-slate-800/40 backdrop-blur-[60px] rounded-[50px] shadow-2xl border border-white/30 dark:border-white/10 flex flex-col overflow-hidden">
+      <div className="editor-page-toolbar"><button className="console-action secondary" type="button" onClick={handleBackClick}><ArrowLeft size={16} />返回内容库</button><span>{docType === 'about' ? '关于页' : docType === 'chatter' ? '杂谈' : '文章'} · {currentDocId === 'new' ? '新建' : currentDocId}</span></div>
+      <main className="editor-workspace">
+          <section className="editor-document">
             <RichTextEditor
               ref={editorRef}
               title={title}
-              setTitle={(val) => { setTitle(val); setHasUnsavedChanges(true); }}
+              setTitle={(val) => { setTitle(val); setHasUnsavedChanges(true); setChangeRevision((revision) => revision + 1); }}
               initialContent={content}
               isTitleLocked={docType === 'about'}
               onOpenImageTool={() => { setImgToolTarget('editor'); setIsImgToolOpen(true); }}
-              onChange={() => setHasUnsavedChanges(true)}
+              onChange={() => { setHasUnsavedChanges(true); setChangeRevision((revision) => revision + 1); }}
             />
           </section>
 
-          <aside className="w-[360px] shrink-0 bg-white/30 dark:bg-slate-800/40 backdrop-blur-[60px] rounded-[50px] shadow-2xl border border-white/30 dark:border-white/10 flex flex-col overflow-hidden">
+          <aside className="editor-meta">
             <MetaMatrix
               type={docType as any} tags={tags} setTags={setTags} cover={cover} setCover={setCover} summary={summary} setSummary={setSummary} mood={mood} setMood={setMood}
               allHistoryPostTags={historyPostTags} allHistoryChatterTags={historyChatterTags} isLoadingTags={isLoadingTags}
               allHistoryMoods={historyMoods} onSave={(isPublish) => handleSave(isPublish, false)} isSaving={isSaving} lastSaved={lastSaved} onOpenImageTool={() => { setImgToolTarget('cover'); setIsImgToolOpen(true); }}
             />
           </aside>
-        </main>
-      </PageTransition>
+      </main>
       <FloatingImageTool isOpen={isImgToolOpen} onClose={() => setIsImgToolOpen(false)} onInsert={(url) => {
         if (imgToolTarget === 'editor') { editorRef.current?.insertImage(url); if (!cover) setCover(url); }
         else { setCover(url); setIsImgToolOpen(false); }
@@ -255,7 +246,7 @@ function EditorContent() {
 export default function EditorPage() {
   return (
     <Suspense fallback={
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <div className="console-skeleton">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
           <p className="text-slate-500 font-bold tracking-widest text-sm uppercase">加载编辑器内核中...</p>

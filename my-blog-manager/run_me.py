@@ -36,6 +36,36 @@ def check_node_environment():
     return True
 
 
+def ensure_frontend_build():
+    """Builds the standalone frontend when it is missing or older than source files."""
+    server_js = os.path.join(".next", "standalone", "server.js")
+    source_roots = ("app", "components", "context", "lib")
+    watched_files = ("package.json", "package-lock.json", "next.config.ts", "tsconfig.json")
+
+    source_files = [path for path in watched_files if os.path.exists(path)]
+    for root in source_roots:
+        if not os.path.isdir(root):
+            continue
+        for current, _, files in os.walk(root):
+            source_files.extend(os.path.join(current, name) for name in files)
+
+    build_time = os.path.getmtime(server_js) if os.path.exists(server_js) else 0
+    source_time = max((os.path.getmtime(path) for path in source_files), default=0)
+
+    if build_time >= source_time:
+        print("✅ 前端生产构建已是最新版本。")
+        return True
+
+    print("🏗️ 前端构建缺失或已过期，正在生成稳定的桌面版产物...")
+    try:
+        subprocess.check_call(["npm", "run", "build"], shell=True)
+        print("✅ 前端生产构建完成。")
+        return True
+    except Exception as error:
+        print(f"❌ 前端生产构建失败: {error}")
+        return False
+
+
 def check_python_environment():
     """检查后端 Python 环境"""
     print("🔍 正在检查后端依赖 (Python)...")
@@ -55,7 +85,7 @@ if __name__ == "__main__":
     print("🌟 --- 星辉云端控制台 · 自动部署系统 --- 🌟")
 
     # 先查前端，再查后端
-    if check_node_environment() and check_python_environment():
+    if check_node_environment() and check_python_environment() and ensure_frontend_build():
         print("\n🚀 所有环境准备就绪，正在点火启动...")
         # 启动 launcher.py
         subprocess.Popen([sys.executable, "launcher.py"],

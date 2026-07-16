@@ -18,7 +18,7 @@ export default function Navbar() {
   const [targetBlogPath, setTargetBlogPath] = useState("");
 
   const pathname = usePathname();
-  const { operations, removeOperation, clearOperations } = useOperations();
+  const { operations, removeOperation, clearOperations, applyOperations } = useOperations();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -85,78 +85,20 @@ export default function Navbar() {
     }
   };
 
-  // 🌟 监控增强版更新逻辑
   const handleUpdateLocal = async () => {
-      if (operations.length === 0) {
-        showToast("队列中没有待处理的操作", "warning");
-        return;
-      }
-
-      try {
-        showToast(`🔍 正在准备发送 ${operations.length} 个任务...`, "info");
-
-        const configRes = await fetch(`/backend_config.json?t=${Date.now()}`);
-        const configData = await configRes.json();
-        const apiBase = `http://127.0.0.1:${configData.api_port}`;
-
-        for (const op of operations) {
-          let apiUrl = '';
-          let body = {};
-
-          switch (op.type) {
-            case 'sync_photowall':
-              apiUrl = `${apiBase}/api/gallery/sync`;
-              body = { albums: op.value };
-              break;
-            case 'sync_friends':
-              apiUrl = `${apiBase}/api/friends/sync`;
-              body = { friends: op.value };
-              break;
-            case 'sync_projects':
-              apiUrl = `${apiBase}/api/projects/sync`;
-              body = { projects: op.value };
-              break;
-            case 'CONFIG':
-              apiUrl = `${apiBase}/api/config/update`;
-              body = { updates: op.payload };
-              break;
-            case 'create_moment':
-              apiUrl = `${apiBase}/api/moments/save`;
-              body = op.payload;
-              break;
-            default:
-              apiUrl = `${apiBase}/api/drafts/sync_local`;
-              body = { operations: [op] };
-              break;
-          }
-
-          showToast(`🚀 正在请求后端: ${apiUrl}`, "info");
-
-          const res = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          });
-
-          const data = await res.json();
-          if (!data.success) {
-            showToast(`❌ 任务执行失败: ${data.message}`, "error");
-            return;
-          }
-        }
-
-        showToast("✅ 任务已全部执行，本地数据已写入！", "success");
-        clearOperations();
-        setIsOpBoxOpen(false);
-
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-
-      } catch (error: any) {
-        showToast(`后端连接异常: ${error.message}`, "error");
-      }
-    };
+    if (operations.length === 0) {
+      showToast("队列中没有待处理的操作", "warning");
+      return;
+    }
+    try {
+      const result = await applyOperations();
+      showToast(`已应用 ${result.count} 项操作到本地工作区`, "success");
+      setIsOpBoxOpen(false);
+      window.location.reload();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "队列应用失败", "error");
+    }
+  };
 
   const handleSyncBlogClick = () => {
     if (!targetBlogPath) {

@@ -15,19 +15,16 @@ import { Color } from '@tiptap/extension-color';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 
-// 🌟 引入 Markdown 插件
-import { Markdown } from 'tiptap-markdown';
-
 // 🌟 引入满血版 C++ 语法高亮
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, all } from 'lowlight';
 
 import {
-  Undo2, Redo2, Eraser, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
+  Undo2, Redo2, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ListTodo,
   Highlighter, Code2, Heading1, Heading2, Heading3,
   Type, ImageIcon, Quote, RemoveFormatting, ChevronDown,
-  Pipette, Hash, Check, Link2, Superscript as SupIcon, Subscript as SubIcon, Minus, Palette, Lock
+  Pipette, Hash, Check, Link2, Superscript as SupIcon, Subscript as SubIcon, Palette, Lock
 } from 'lucide-react';
 
 const lowlight = createLowlight(all);
@@ -39,7 +36,7 @@ const CustomImage = Image.extend({
       width: {
         default: '100%',
         renderHTML: attributes => ({
-          style: `width: ${attributes.width}; height: auto; display: block; margin: 2rem auto; border-radius: 2rem; box-shadow: 0 20px 50px rgba(0,0,0,0.15);`
+          style: `width: ${attributes.width}; height: auto; display: block; margin: 2rem auto;`
         })
       }
     };
@@ -64,7 +61,7 @@ const CustomColorPicker = ({ activeColor, onSelect, onConfirm, recentColors, onC
       <div className="fixed inset-0 z-[9990] bg-slate-900/20 dark:bg-black/40 backdrop-blur-sm transition-all" onClick={onClose} />
 
       {/* 永远居中显示的调色板面板 */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[32px] p-6 shadow-2xl border border-white/40 dark:border-white/10 z-[9999] animate-in fade-in zoom-in-95 duration-200">
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 bg-white p-6 shadow-2xl border border-slate-300 z-[9999] animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col gap-5">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color Palette</span>
@@ -142,7 +139,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         lowlight,
         defaultLanguage: 'cpp',
         HTMLAttributes: {
-          class: 'bg-[#282c34] text-[#abb2bf] p-6 rounded-[1.5rem] font-mono my-6 overflow-x-auto shadow-inner'
+          class: 'bg-[#282c34] text-[#abb2bf] p-6 font-mono my-6 overflow-x-auto'
         },
       }),
       Underline, Subscript, Superscript, TextStyle, Color, FontSize, CustomImage,
@@ -161,7 +158,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
       setRenderTrigger(v => v + 1);
     },
     editorProps: {
-      attributes: { class: 'prose prose-slate dark:prose-invert prose-lg max-w-none w-full focus:outline-none min-h-full pb-60 font-serif leading-relaxed px-4 editor-content-area' }
+      attributes: { class: 'prose prose-slate prose-base max-w-none w-full focus:outline-none min-h-full pb-40 leading-relaxed editor-content-area' }
     },
   });
 
@@ -187,7 +184,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
     if (!editor || !initialContent) return;
     if (loadedContentRef.current !== initialContent) {
       const safeContent = initialContent.replace(/~~([\s\S]*?)~~/g, '<s>$1</s>');
-      editor.commands.setContent(safeContent, false);
+      editor.commands.setContent(safeContent, { emitUpdate: false });
       loadedContentRef.current = initialContent;
     }
   }, [editor, initialContent]);
@@ -216,8 +213,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
     <button
       onClick={onClick}
       title={title}
-      className={`p-2.5 rounded-xl transition-all duration-300 ease-out flex items-center justify-center 
-        ${active ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/40 scale-110' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+      className={`editor-tool-button ${active ? 'is-active' : ''}`}
     >
       {children}
     </button>
@@ -226,10 +222,10 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
   return (
     <div className="flex flex-col h-full w-full min-h-0 bg-transparent relative">
       <style dangerouslySetInnerHTML={{ __html: `
-        .editor-content-area h1 { font-size: 3rem !important; font-weight: 950 !important; margin-bottom: 2rem !important; margin-top: 3rem !important; line-height: 1.1; color: inherit; } 
-        .editor-content-area h2 { font-size: 2.2rem !important; font-weight: 800 !important; margin-bottom: 1.5rem !important; margin-top: 2rem !important; } 
-        .editor-content-area h3 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 1rem !important; } 
-        .editor-content-area p { font-size: 1.15rem !important; line-height: 1.85 !important; } 
+        .editor-content-area h1 { font-size: 2.2rem !important; font-weight: 850 !important; margin-bottom: 1.5rem !important; margin-top: 2.2rem !important; line-height: 1.2; color: inherit; }
+        .editor-content-area h2 { font-size: 1.75rem !important; font-weight: 800 !important; margin-bottom: 1.2rem !important; margin-top: 1.8rem !important; }
+        .editor-content-area h3 { font-size: 1.35rem !important; font-weight: 700 !important; margin-bottom: .8rem !important; }
+        .editor-content-area p { font-size: 1rem !important; line-height: 1.8 !important; }
         .editor-content-area ul { list-style-type: disc !important; padding-left: 1.5rem !important; } 
         .editor-content-area ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
         
@@ -240,7 +236,6 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
           background-color: rgba(99, 102, 241, 0.05) !important;
           padding: 1rem 1.5rem !important;
           margin: 1.5rem 0 !important;
-          border-radius: 0 1.25rem 1.25rem 0 !important;
           font-style: italic !important;
           color: #64748b !important;
         }
@@ -276,14 +271,14 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         .editor-content-area pre code .hljs-symbol, .editor-content-area pre code .hljs-bullet, .editor-content-area pre code .hljs-link, .editor-content-area pre code .hljs-meta, .editor-content-area pre code .hljs-selector-id, .editor-content-area pre code .hljs-title, .editor-content-area pre code .hljs-title.function_ { color: #61aeee; } 
       `}} />
 
-      <div className="shrink-0 px-12 pt-14 pb-4 flex items-center gap-4">
+      <div className="editor-title-row">
         <input
           type="text"
           value={title}
           onChange={(e) => !isTitleLocked && setTitle(e.target.value)}
           readOnly={isTitleLocked}
           placeholder="文章大标题..."
-          className={`flex-1 text-5xl font-black bg-transparent border-none outline-none transition-all tracking-tighter 
+          className={`flex-1 text-3xl font-black bg-transparent border-none outline-none transition-all
             ${isTitleLocked ? 'text-slate-400 dark:text-slate-600 cursor-default select-none' : 'text-slate-900 dark:text-white placeholder:text-slate-200 dark:placeholder:text-slate-800'}
           `}
         />
@@ -295,7 +290,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         )}
       </div>
 
-      <div className="shrink-0 px-8 py-2.5 border-y border-white/20 dark:border-white/10 flex flex-wrap items-center gap-1.5 bg-white/10 dark:bg-black/20 backdrop-blur-md z-50">
+      <div className="editor-toolbar">
         <div className="flex items-center gap-1"><Btn onClick={() => editor.chain().focus().undo().run()}><Undo2 size={16}/></Btn><Btn onClick={() => editor.chain().focus().redo().run()}><Redo2 size={16}/></Btn><Btn onClick={() => editor.chain().focus().unsetAllMarks().run()}><RemoveFormatting size={16}/></Btn></div>
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
 
@@ -380,7 +375,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
       {showTextPicker && <CustomColorPicker activeColor="#6366F1" recentColors={textColors} onClose={() => setShowTextPicker(false)} onSelect={(c: string) => editor.chain().focus().setColor(c).run()} onConfirm={(c: string) => { if(!textColors.includes(c)) setTextColors(p => [c, ...p].slice(0, 6)); setShowTextPicker(false); }} />}
       {showHighlightPicker && <CustomColorPicker activeColor="#FEF08A" recentColors={highlightColors} onClose={() => setShowHighlightPicker(false)} onSelect={(c: string) => editor.chain().focus().setHighlight({ color: c }).run()} onConfirm={(c: string) => { if(!highlightColors.includes(c)) setHighlightColors(p => [c, ...p].slice(0, 6)); setShowHighlightPicker(false); }} />}
 
-      <div className="flex-1 overflow-y-auto px-12 py-12 custom-scrollbar"><EditorContent editor={editor} /></div>
+      <div className="editor-scroll custom-scrollbar"><EditorContent editor={editor} /></div>
     </div>
   );
 });

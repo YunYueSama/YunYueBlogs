@@ -1,32 +1,30 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 引入所有 API 路由
-from cms_core.api import music, config, picbed, drafts, moments
-from cms_core.api import gallery, friends, projects
-from cms_core.api import sync, deploy
+from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, operations, picbed, projects, settings_v2, sync
+from cms_core.workspace import import_legacy_content, workspace_counts
 
-app = FastAPI(
-    title="XingHuiSama CMS Backend",
-    version="1.0.0",
-    # 性能优化：增加请求体大小限制
-    max_request_size=50 * 1024 * 1024  # 50MB
-)
-
-# 🌟 核心修复：添加跨域中间件，彻底解决 Failed to fetch 报错
+app = FastAPI(title="星辉云端控制台 API", version="2.0.0", max_request_size=50 * 1024 * 1024)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有来源请求
-    allow_credentials=True,
-    allow_methods=["*"],  # 允许所有请求方法 (GET, POST 等)
-    allow_headers=["*"],  # 允许所有请求头
+    allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
+    allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):\d+$",
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
+
+
+@app.on_event("startup")
+def initialize_workspace():
+    import_legacy_content()
+
 
 @app.get("/api/status")
 def get_status():
-    return {"status": "online", "message": "中枢神经已连接"}
+    return {"ok": True, "data": {"status": "online", "version": "2.0.0", "counts": workspace_counts()}}
 
-# 注册所有路由
+
 app.include_router(music.router, prefix="/api/music", tags=["Music"])
 app.include_router(config.router, prefix="/api/config", tags=["Config"])
 app.include_router(picbed.router, prefix="/api/picbed", tags=["PicBed"])
@@ -37,3 +35,6 @@ app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 app.include_router(moments.router, prefix="/api/moments", tags=["Moments"])
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 app.include_router(deploy.router, prefix="/api/deploy", tags=["Deploy"])
+app.include_router(deploy.jobs_router, prefix="/api/jobs", tags=["Jobs"])
+app.include_router(settings_v2.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])

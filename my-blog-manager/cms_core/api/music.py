@@ -1,44 +1,93 @@
-from fastapi import APIRouter
-import requests
+from __future__ import annotations
+
+import time
+from typing import Annotated
+
+import httpx
+from fastapi import APIRouter, Path, Query
+from fastapi.responses import JSONResponse
+
+from cms_core import kugou
 
 router = APIRouter()
+MUSIC_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; YunYueBlogs-Manager/2.0; +https://www.xinghuisama.top)",
+    "Referer": "https://music.163.com/",
+}
+MUSIC_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def ok(data=None):
+    return JSONResponse({"ok": True, "data": data})
+
+
+def fail(code: str, message: str, status_code: int):
+    return JSONResponse({"ok": False, "error": {"code": code, "message": message}}, status_code=status_code)
 
 
 @router.get("/query/{song_id}")
-def query_netease_music(song_id: str):
-    """通过网易云公开接口查询歌曲详情"""
-    print(f"\n[API] 🎵 收到查询网易云音乐请求, ID: {song_id}")
+def query_netease_music(song_id: Annotated[str, Path(pattern=r"^\d{1,20}$")]):
+    cached = MUSIC_CACHE.get(song_id)
+    if cached and cached[0] > time.monotonic():
+        return ok(cached[1])
     try:
         api_url = f"https://music.163.com/api/song/detail/?id={song_id}&ids=[{song_id}]"
-        headers = {
-            # 伪装得更像真实浏览器
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Referer": "https://music.163.com/"
-        }
-        response = requests.get(api_url, headers=headers, timeout=5)
-
-        # 把 HTTP 状态码打出来，如果是 403 就是被网易云拦截了
-        print(f"[API] 📡 网易云响应状态码: {response.status_code}")
-
+        response = httpx.get(api_url, headers=MUSIC_HEADERS, timeout=6, follow_redirects=False)
+        response.raise_for_status()
         data = response.json()
+        song = data.get("songs", [None])[0] if isinstance(data.get("songs"), list) and data.get("songs") else None
+        if not isinstance(song, dict):
+            return fail("music_not_found", "未找到该歌曲，可能是 ID 无效或歌曲不可用。", 404)
+        artists = song.get("artists") if isinstance(song.get("artists"), list) else []
+        album = song.get("album") if isinstance(song.get("album"), dict) else {}
+        result = {
+            "id": song_id,
+            "name": str(song.get("name") or "未命名歌曲")[:200],
+            "artist": str(artists[0].get("name") if artists and isinstance(artists[0], dict) else "未知歌手")[:200],
+            "album": str(album.get("name") or "")[:200],
+            "cover": str(album.get("picUrl") or "")[:2048],
+            "durationMs": max(0, int(song.get("duration") or 0)),
+        }
+        if len(MUSIC_CACHE) >= 128:
+            MUSIC_CACHE.clear()
+        MUSIC_CACHE[song_id] = (time.monotonic() + 3600, result)
+        return ok(result)
+    except (httpx.HTTPError, ValueError, TypeError):
+        return fail("music_upstream_unavailable", "网易云音乐服务暂时不可用，请稍后重试。", 502)
 
-        if data.get("songs") and len(data["songs"]) > 0:
-            song = data["songs"][0]
-            print(f"[API] ✅ 查询成功: {song['name']} - {song['artists'][0]['name']}")
-            return {
-                "success": True,
-                "data": {
-                    "id": song_id,
-                    "name": song["name"],
-                    "artist": song["artists"][0]["name"],
-                    "album": song["album"]["name"],
-                    "cover": song["album"]["picUrl"]
-                }
-            }
-        print(f"[API] ❌ 查无此歌 (ID: {song_id})")
-        return {"success": False, "message": "未找到该歌曲，可能是 VIP 歌曲或 ID 错误"}
 
-    except Exception as e:
-        # 【关键】：在终端里把真正的报错原因打印出来！
-        print(f"[API] 💥 网易云接口发生严重错误: {str(e)}")
-        return {"success": False, "message": f"后端请求失败: {str(e)}"}
+@router.get("/search/kugou")
+def search_kugou_music(keyword: Annotated[str, Query(min_length=1, max_length=100)]):
+    try:
+        return ok(kugou.search_songs(keyword))
+    except (httpx.HTTPError, ValueError, TypeError):
+        return fail("kugou_search_unavailable", "酷狗音乐搜索暂时不可用，请稍后重试。", 502)
+
+
+@router.get("/lyrics/status")
+def query_lyric_status(
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+    artist: Annotated[str, Query(max_length=200)] = "",
+    song_hash: Annotated[str, Query(alias="hash", pattern=r"^$|^[A-Fa-f0-9]{32}$")] = "",
+    album_audio_id: Annotated[str, Query(alias="albumAudioId", max_length=40)] = "",
+    duration_ms: Annotated[int, Query(alias="durationMs", ge=0, le=3_600_000)] = 0,
+):
+    try:
+        result = kugou.fetch_lyrics(
+            song_hash=song_hash,
+            album_audio_id=album_audio_id,
+            name=name,
+            artist=artist,
+            duration_ms=duration_ms,
+        )
+        return ok(kugou.lyric_summary(result))
+    except (httpx.HTTPError, ValueError, TypeError):
+        return fail("kugou_lyric_unavailable", "酷狗逐字歌词服务暂时不可用，公开站会回退到网易云歌词。", 502)
+
+
+@router.get("/kugou/{song_hash}/status")
+def query_kugou_status(song_hash: Annotated[str, Path(pattern=r"^[A-Fa-f0-9]{32}$")]):
+    try:
+        return ok(kugou.playback_info(song_hash))
+    except (httpx.HTTPError, ValueError, TypeError):
+        return fail("kugou_playback_unavailable", "酷狗音频资源暂时不可用，请稍后重试。", 502)

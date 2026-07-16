@@ -1,0 +1,1 @@
+export default function Loading() { return <div className="console-grid" aria-label="加载中"><div className="console-skeleton span-12" /><div className="console-skeleton span-6" /><div className="console-skeleton span-6" /></div>; }

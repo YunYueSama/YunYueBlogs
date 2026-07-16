@@ -1,254 +1,116 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from 'react';
+import { AlertTriangle, FilePlus2, LoaderCircle, Pencil, Search, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import Navbar from '../../components/Navbar';
-import PageTransition from '../../components/PageTransition';
-import { ToastProvider, useToast } from '../../components/ToastProvider';
-import { AlertTriangle, Search, Trash2, X, Sparkles, Pencil } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import PageHeader from '../../components/manager/PageHeader';
+import { useToast } from '../../components/ToastProvider';
+import { managerApi } from '../../lib/managerApi';
 
-function DraftsContent() {
-  const { showToast } = useToast();
-  const [drafts, setDrafts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // 👇 自定义弹窗状态管理
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null; title: string | null }>({
-    isOpen: false,
-    id: null,
-    title: null
-  });
-
-  const blogPath = "F:/Projects/my-blog";
-
-  const fetchDrafts = async () => {
-    setIsLoading(true);
-    try {
-      const configRes = await fetch(`/backend_config.json?t=${Date.now()}`);
-      const configData = await configRes.json();
-
-      const res = await fetch(`http://127.0.0.1:${configData.api_port}/api/drafts/list`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blog_path: blogPath })
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.drafts)) {
-        setDrafts(data.drafts);
-      } else {
-        setDrafts([]);
-      }
-    } catch (error) {
-      setDrafts([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDrafts();
-  }, []);
-
-  // 🗑️ 核心逻辑：执行真实的销毁操作
-  const confirmDelete = async () => {
-    if (!deleteModal.id) return;
-    const id = deleteModal.id;
-
-    try {
-      const configRes = await fetch(`/backend_config.json?t=${Date.now()}`);
-      const configData = await configRes.json();
-
-      const res = await fetch(`http://127.0.0.1:${configData.api_port}/api/drafts/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blog_path: blogPath, id: id })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        showToast("🗑️ 草稿已被彻底销毁", "success");
-        setDrafts(prev => prev.filter(draft => draft.id !== id));
-      } else {
-        showToast(`销毁失败: ${data.message}`, "error");
-      }
-    } catch (error) {
-      showToast("引擎连接失败", "error");
-    } finally {
-      // 关闭弹窗并重置状态
-      setDeleteModal({ isOpen: false, id: null, title: null });
-    }
-  };
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('zh-CN', {
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit'
-    });
-  };
-
-  const filteredDrafts = drafts.filter(draft =>
-    (draft.title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (draft.contentPreview || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  return (
-    <div className="min-h-screen relative pb-20">
-      <Navbar />
-
-      {/* ---------------------------------------------------------
-          💎 自定义绝美确认弹窗 (与杂谈页保持高度统一)
-      --------------------------------------------------------- */}
-      <AnimatePresence>
-        {deleteModal.isOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setDeleteModal({ isOpen: false, id: null, title: null })}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
-            />
-
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-white/50 dark:border-white/10 p-10 text-center overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-50" />
-
-              <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="w-10 h-10 text-red-500" />
-              </div>
-
-              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">销毁这篇草稿？</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-8 leading-relaxed">
-                你正在尝试抹除未发布的草稿 <br />
-                <span className="text-red-500 font-bold">"{deleteModal.title}"</span>。<br />
-                此操作不可逆，所有未保存的灵感将永久消失。
-              </p>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteModal({ isOpen: false, id: null, title: null })}
-                  className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  继续保留
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 py-4 bg-red-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-red-500/30 hover:bg-red-600 transition-all active:scale-95"
-                >
-                  确认移除
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <PageTransition>
-        <main className="w-[90%] max-w-5xl mx-auto mt-28 relative z-10">
-
-          <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <h1 className="text-4xl font-black text-slate-800 dark:text-white mb-3 tracking-wider flex items-center gap-3">
-                📝 创作草稿箱
-                <span className="text-sm font-bold bg-indigo-500 text-white px-3 py-1 rounded-full">{drafts.length}</span>
-              </h1>
-              <p className="text-slate-500 dark:text-slate-400 font-medium text-sm flex items-center gap-2">
-                <Sparkles size={14} className="text-indigo-500" /> 灵感的避风港，所有未发布的心血都在这里。
-              </p>
-            </div>
-
-            <div className="relative w-full md:w-72 group">
-              <input
-                type="text"
-                placeholder="检索草稿..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/50 dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-3 pl-12 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
-              />
-              <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-            </div>
-          </header>
-
-          <div className="mb-8 flex gap-4">
-            <Link href="/editor?id=new&type=post" className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-2">
-              <Pencil size={16} /> 新建文章草稿
-            </Link>
-            <Link href="/editor?id=new&type=chatter" className="px-6 py-3 bg-pink-500 hover:bg-pink-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-pink-500/30 transition-all active:scale-95 flex items-center gap-2">
-              <Sparkles size={16} /> 新建杂谈草稿
-            </Link>
-          </div>
-
-          {isLoading ? (
-            <div className="w-full py-20 flex justify-center">
-              <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <AnimatePresence mode='popLayout'>
-                {filteredDrafts.map((draft) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    key={draft.id}
-                  >
-                    <div className="group bg-white/60 dark:bg-slate-800/50 backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden relative">
-
-                      <div className="flex justify-between items-start mb-4 relative z-10">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${draft.type === 'chatter' ? 'bg-pink-500/10 text-pink-600 border-pink-500/20' : 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'}`}>
-                            {draft.type === 'chatter' ? '杂谈' : '文章'}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-400">
-                            {formatDate(draft.lastModified)}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => setDeleteModal({ isOpen: true, id: draft.id, title: draft.title || "无标题草稿" })}
-                          className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700/50 text-slate-400 hover:bg-red-500 hover:text-white transition-all shadow-sm z-20"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-
-                      <Link href={`/editor?id=${draft.id}`} className="block">
-                        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                          {draft.title || "无标题草稿"}
-                        </h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed h-10">
-                          {draft.contentPreview || "没有任何内容..."}
-                        </p>
-                      </Link>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-
-              {filteredDrafts.length === 0 && (
-                <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl">
-                  <p className="text-slate-500 font-bold">搜索不到相关草稿，换个关键词试试？</p>
-                </div>
-              )}
-            </div>
-          )}
-
-        </main>
-      </PageTransition>
-    </div>
-  );
-}
+type DraftSummary = {
+  id: string;
+  type: 'post' | 'chatter' | 'about';
+  title: string;
+  description?: string;
+  contentPreview?: string;
+  lastModified: number;
+};
 
 export default function DraftsPage() {
-  return (
-    <ToastProvider>
-      <DraftsContent />
-    </ToastProvider>
-  );
+  const { showToast } = useToast();
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DraftSummary | null>(null);
+
+  const loadDrafts = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await managerApi<{ drafts: DraftSummary[] }>('/api/drafts');
+      setDrafts(data.drafts || []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '草稿读取失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadDrafts(); }, [loadDrafts]);
+
+  useEffect(() => {
+    if (!pendingDelete) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !removing) setPendingDelete(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [pendingDelete, removing]);
+
+  const filteredDrafts = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return drafts;
+    return drafts.filter((draft) => [draft.title, draft.description, draft.contentPreview]
+      .some((value) => value?.toLowerCase().includes(keyword)));
+  }, [drafts, query]);
+
+  const removeDraft = async () => {
+    if (!pendingDelete || removing) return;
+    setRemoving(pendingDelete.id);
+    try {
+      await managerApi(`/api/drafts/${encodeURIComponent(pendingDelete.id)}`, { method: 'DELETE' });
+      setDrafts((current) => current.filter((draft) => draft.id !== pendingDelete.id));
+      showToast('草稿已从本地工作区移除', 'success');
+      setPendingDelete(null);
+    } catch (deleteError) {
+      showToast(deleteError instanceof Error ? deleteError.message : '草稿删除失败', 'error');
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  return <>
+    <PageHeader
+      eyebrow="Local draft workspace"
+      title="草稿箱"
+      description="草稿只保存在本机 workspace，不会进入管理端仓库或公开站点。"
+      actions={<><Link className="console-action secondary" href="/editor?type=chatter"><FilePlus2 size={16} />新建杂谈</Link><Link className="console-action" href="/editor?type=post"><FilePlus2 size={16} />新建文章</Link></>}
+    />
+
+    <section className="console-panel">
+      <header><div><h2>未发布内容</h2><span>{drafts.length} 份本地草稿</span></div></header>
+      <div className="structured-toolbar">
+        <label className="media-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、摘要或正文" /></label>
+        <button className="console-action secondary" type="button" onClick={() => void loadDrafts()} disabled={loading}>{loading ? <LoaderCircle className="animate-spin" size={16} /> : <Search size={16} />}刷新</button>
+      </div>
+
+      {error && <div className="form-status error" role="alert">{error}</div>}
+      {loading ? <div className="structured-empty"><LoaderCircle className="animate-spin" size={24} /><span>正在读取本地草稿</span></div> : filteredDrafts.length ? <div className="draft-grid">{filteredDrafts.map((draft) => <article className="draft-card" key={draft.id}>
+        <div className="draft-card-meta"><span>{draft.type === 'chatter' ? '杂谈' : draft.type === 'about' ? '关于' : '文章'}</span><time>{formatDate(draft.lastModified)}</time></div>
+        <div><h3>{draft.title || '无标题草稿'}</h3><p>{draft.contentPreview || draft.description || '尚未写入正文'}</p></div>
+        <footer><Link className="console-action secondary" href={`/editor?id=${encodeURIComponent(draft.id)}&type=${draft.type}`}><Pencil size={15} />继续编辑</Link><button className="console-icon danger" type="button" onClick={() => setPendingDelete(draft)} aria-label={`删除${draft.title || '无标题草稿'}`}><Trash2 size={16} /></button></footer>
+      </article>)}</div> : <div className="structured-empty"><FilePlus2 size={28} /><strong>{query ? '没有匹配的草稿' : '草稿箱是空的'}</strong><span>{query ? '换一个关键词试试。' : '在编辑器中保存草稿后，它会出现在这里。'}</span></div>}
+    </section>
+
+    {pendingDelete && createPortal(<div className="console-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !removing) setPendingDelete(null); }}>
+      <section className="console-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-draft-title">
+        <header><div><span>DESTRUCTIVE ACTION</span><h2 id="delete-draft-title">删除本地草稿</h2></div><button className="console-icon" type="button" onClick={() => setPendingDelete(null)} disabled={Boolean(removing)} aria-label="关闭"><X size={18} /></button></header>
+        <div className="console-dialog-body"><AlertTriangle size={28} color="var(--console-coral)" /><p>将删除“{pendingDelete.title || '无标题草稿'}”的草稿副本。已发布的文章或杂谈不会受到影响。</p></div>
+        <footer><button className="console-action secondary" type="button" onClick={() => setPendingDelete(null)} disabled={Boolean(removing)}>取消</button><button className="console-action danger" type="button" onClick={() => void removeDraft()} disabled={Boolean(removing)}>{removing ? <LoaderCircle className="animate-spin" size={16} /> : <Trash2 size={16} />}确认删除</button></footer>
+      </section>
+    </div>, document.body)}
+  </>;
+}
+
+function formatDate(timestamp: number) {
+  if (!Number.isFinite(timestamp)) return '时间未知';
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp);
 }

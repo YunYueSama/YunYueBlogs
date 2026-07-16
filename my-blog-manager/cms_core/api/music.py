@@ -11,7 +11,7 @@ from cms_core import kugou
 
 router = APIRouter()
 MUSIC_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; YunYueBlogs-Manager/2.0; +https://www.xinghuisama.top)",
+    "User-Agent": "Mozilla/5.0 (compatible; YunYueBlogs-Manager/2.0; +https://majo-elaina.top)",
     "Referer": "https://music.163.com/",
 }
 MUSIC_CACHE: dict[str, tuple[float, dict]] = {}

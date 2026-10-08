@@ -215,8 +215,7 @@ def test_music_settings_validate_deduplicate_and_limit_ids() -> None:
     assert settings_v2.MusicSettings(musicIds=["12", "12", "34"]).musicIds == ["12", "34"]
     with pytest.raises(ValidationError):
         settings_v2.MusicSettings(musicIds=["not-an-id"])
-    with pytest.raises(ValidationError):
-        settings_v2.MusicSettings(musicIds=[str(index) for index in range(13)])
+    assert len(settings_v2.MusicSettings(musicIds=[str(index) for index in range(100)]).musicIds) == 100
 
 
 def test_upload_encrypted_krc_extracts_word_timing_and_languages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

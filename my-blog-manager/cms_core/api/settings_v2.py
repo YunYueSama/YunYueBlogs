@@ -86,8 +86,8 @@ class PublicSiteConfig(BaseModel):
     siteUrl: str = ""
     buildDate: str
     social: SocialConfig
-    musicIds: list[str] = Field(default_factory=list, max_length=12)
-    musicTracks: list[MusicTrackReference] = Field(default_factory=list, max_length=12)
+    musicIds: list[str] = Field(default_factory=list)
+    musicTracks: list[MusicTrackReference] = Field(default_factory=list)
     danmaku: list[str] = Field(default_factory=list)
     bangumiUsername: str = Field(default="", max_length=100)
     giscus: GiscusConfig
@@ -119,8 +119,8 @@ class PublicSiteConfig(BaseModel):
 
 
 class MusicSettings(BaseModel):
-    musicIds: list[str] = Field(default_factory=list, max_length=12)
-    musicTracks: list[MusicTrackReference] = Field(default_factory=list, max_length=12)
+    musicIds: list[str] = Field(default_factory=list)
+    musicTracks: list[MusicTrackReference] = Field(default_factory=list)
 
     @field_validator("musicIds")
     @classmethod

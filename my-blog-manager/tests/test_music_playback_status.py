@@ -30,3 +30,14 @@ def test_invalid_id_never_requests_account(monkeypatch):
     monkeypatch.setattr(music.music_accounts, "private_playback", playback)
     app = FastAPI(); app.include_router(music.router)
     assert TestClient(app).get("/playback/kugou/bad/status").json()["data"]["available"] is False
+
+
+def test_playlist_and_lyrics_preserve_more_than_twelve_tracks():
+    from cms_core.api.settings_v2 import MusicSettings
+    from cms_core.music_library import MusicLibrary
+    ids = [str(i) for i in range(1, 101)]
+    settings = MusicSettings(musicIds=ids)
+    assert len(settings.musicTracks) == 100
+    assert settings.musicIds == ids
+    lyrics = MusicLibrary(tracks={f"netease:{i}": {} for i in ids})
+    assert len(lyrics.tracks) == 100

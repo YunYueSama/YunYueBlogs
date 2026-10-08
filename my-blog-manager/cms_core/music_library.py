@@ -51,8 +51,6 @@ class MusicLibrary(BaseModel):
     @field_validator("tracks")
     @classmethod
     def validate_tracks(cls, value: dict[str, TrackLyricConfig]) -> dict[str, TrackLyricConfig]:
-        if len(value) > 12:
-            raise ValueError("歌词配置最多包含 12 首歌曲")
         if any(not (SONG_ID.fullmatch(song_id) or TRACK_KEY.fullmatch(song_id)) for song_id in value):
             raise ValueError("歌词配置包含无效歌曲标识")
         return value

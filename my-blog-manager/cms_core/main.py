@@ -15,11 +15,15 @@ app = FastAPI(title="星辉云端控制台 API", version="2.0.0", max_request_si
 @app.middleware('http')
 async def synchronize_cloud_content(request, call_next):
     path = request.url.path
-    managed = path.startswith(('/api/settings', '/api/gallery', '/api/projects', '/api/friends', '/api/moments', '/api/operations', '/api/sync/', '/api/deploy/push')) or path in ('/api/drafts/get', '/api/drafts/all_tags')
+    managed = (path.startswith(('/api/settings', '/api/gallery', '/api/projects', '/api/friends', '/api/moments', '/api/operations', '/api/sync/', '/api/deploy/push')) or path in ('/api/drafts/get', '/api/drafts/all_tags')) and path != '/api/settings/integrations'
     if managed and cloud_content.status().get('enabled') and request.method != 'OPTIONS':
         async with cloud_requests:
             try:
-                if request.method in ('POST', 'PUT', 'DELETE') and path not in ('/api/drafts/get',):
+                if path == '/api/operations' and request.method == 'PUT':
+                    # 队列只保存在本机；实际应用时再严格校验每条操作版本。
+                    # 防抖自动保存不能每次都等待远程 fetch。
+                    pass
+                elif request.method in ('POST', 'PUT', 'DELETE') and path not in ('/api/drafts/get',):
                     await run_in_threadpool(cloud_content.require_revision, request.headers.get('X-YunYue-Revision'))
                 else:
                     await run_in_threadpool(cloud_content.refresh)

@@ -24,8 +24,8 @@ type LyricAsset = { format: 'lrc' | 'yrc' | 'krc' | 'qrc'; fileName: string; byt
 type TrackLyricSettings = { offsetMs: number; primary?: LyricAsset | null; translation?: LyricAsset | null; romanization?: LyricAsset | null };
 type MusicSettings = { musicIds: string[]; musicTracks: TrackReference[]; tracks: Record<string, TrackLyricSettings> };
 type LyricStatus = { available: boolean; source: 'kugou'; format?: string; wordTimed?: boolean; candidate?: { song: string; artist: string }; reason?: string };
-type PlaybackStatus = { available: boolean; playbackSource: MusicSource; playbackScope?: 'public' | 'account'; reason?: string; name?: string; artist?: string; album?: string; cover?: string; albumAudioId?: string };
-type Track = TrackReference & { name: string; artist: string; album: string; cover: string; durationMs?: number; playbackAvailable?: boolean; playbackSource?: MusicSource; playbackScope?: 'public' | 'account'; playbackReason?: string; lyric?: LyricStatus };
+type PlaybackStatus = { available: boolean; playbackSource: MusicSource; playbackScope?: 'public' | 'account'; localAvailable?: boolean; localReason?: string; reason?: string; name?: string; artist?: string; album?: string; cover?: string; albumAudioId?: string };
+type Track = TrackReference & { name: string; artist: string; album: string; cover: string; durationMs?: number; playbackAvailable?: boolean; playbackSource?: MusicSource; playbackScope?: 'public' | 'account'; playbackReason?: string; localAvailable?: boolean; localReason?: string; lyric?: LyricStatus };
 type TrackResult = { track?: Track; error?: string; checking?: boolean };
 
 const playbackReasons: Record<string, string> = {
@@ -92,7 +92,7 @@ export default function MusicManager() {
         const params = new URLSearchParams({ name: result.name, artist: result.artist, durationMs: String(result.durationMs || 0) });
         if (force) params.set('refresh', 'true');
         const playback = await managerApi<PlaybackStatus>(`/api/music/playback/netease/${reference.id}/status?${params.toString()}`);
-        base = { ...reference, ...result, key: referenceKey(reference), source: 'netease', playbackAvailable: playback.available, playbackSource: playback.playbackSource, playbackScope: playback.playbackScope, playbackReason: playback.reason };
+        base = { ...reference, ...result, key: referenceKey(reference), source: 'netease', playbackAvailable: playback.available, playbackSource: playback.playbackSource, playbackScope: playback.playbackScope, localAvailable: playback.localAvailable, localReason: playback.localReason, playbackReason: playback.reason };
       } else {
         const params = new URLSearchParams({ name: reference.name || '', artist: reference.artist || '', albumId: reference.albumId || '', albumAudioId: reference.albumAudioId || '' });
         if (force) params.set('refresh', 'true');
@@ -107,7 +107,7 @@ export default function MusicManager() {
           cover: reference.cover || playback.cover || '',
           albumAudioId: reference.albumAudioId || playback.albumAudioId || '',
           playbackAvailable: playback.available,
-          playbackSource: playback.playbackSource, playbackScope: playback.playbackScope,
+          playbackSource: playback.playbackSource, playbackScope: playback.playbackScope, localAvailable: playback.localAvailable, localReason: playback.localReason,
           playbackReason: playback.reason,
         };
       }
@@ -171,8 +171,12 @@ export default function MusicManager() {
   }, [refreshTracks]);
 
   const canQuery = source === 'netease' ? /^\d{1,20}$/.test(candidate.trim()) : candidate.trim().length >= 2;
-  const unavailableCount = useMemo(() => references.filter((reference) => isUnavailable(tracks[referenceKey(reference)])).length, [references, tracks]);
+  const unavailableCount = useMemo(() => references.filter((reference) => tracks[referenceKey(reference)]?.error || tracks[referenceKey(reference)]?.track?.localAvailable === false).length, [references, tracks]);
   const checkingCount = useMemo(() => references.filter((reference) => !tracks[referenceKey(reference)] || tracks[referenceKey(reference)].checking).length, [references, tracks]);
+  const localPendingCount = references.filter((reference) => {
+    const result = tracks[referenceKey(reference)];
+    return result && !result.checking && !result.error && result.track?.localAvailable === undefined;
+  }).length;
 
   const lookup = async (event: FormEvent) => {
     event.preventDefault();
@@ -247,16 +251,8 @@ export default function MusicManager() {
     setBusy('save');
     setStatus(null);
     try {
-      const checked = await mapLimited(references, async (reference) => [referenceKey(reference), await queryTrack(reference, true)] as const);
-      const checkedTracks = Object.fromEntries(checked);
-      setTracks(checkedTracks);
-      const failed = checked.filter(([, result]) => Boolean(result.error));
-      if (failed.length) {
-        setStatus({ error: true, message: `保存已取消：${failed.length} 首歌曲检查服务异常，请稍后重试。` });
-        return;
-      }
       const checkedReferences = references.map((reference) => {
-        const track = checkedTracks[referenceKey(reference)]?.track;
+        const track = tracks[referenceKey(reference)]?.track;
         return track ? toReference(track) : reference;
       });
       const saved = await managerApi<MusicSettings>('/api/settings/music', { method: 'POST', body: JSON.stringify({ musicTracks: checkedReferences }) });
@@ -296,7 +292,7 @@ export default function MusicManager() {
   return <div className="console-grid">
     <MusicAccounts preview={preview} onClosePreview={() => setPreview(null)} />
     <section className="console-panel music-playlist-panel span-8">
-      <header><div><h2><ListMusic size={19} />双源播放列表</h2><span>网易云与酷狗共用一个播放器；按需添加歌曲</span></div><div className="music-validation-actions"><span className={`integration-badge ${unavailableCount === 0 && checkingCount === 0 ? 'is-ready' : ''}`}><span className={`status-dot ${unavailableCount ? 'warn' : ''}`} />{checkingCount ? `${checkingCount} 首检查中` : unavailableCount ? `${unavailableCount} 首需账号音源` : `${references.length} 首可播放`}</span><button className="console-action secondary" type="button" onClick={() => void refreshTracks(references, 'refresh')} disabled={Boolean(busy) || Boolean(validatingTrack) || !references.length}>{busy === 'refresh' ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}检查全部</button></div></header>
+      <header><div><h2><ListMusic size={19} />双源播放列表</h2><span>网易云与酷狗共用一个播放器；按需添加歌曲</span></div><div className="music-validation-actions"><span className={`integration-badge ${unavailableCount === 0 && checkingCount === 0 && localPendingCount === 0 ? 'is-ready' : ''}`}><span className={`status-dot ${unavailableCount ? 'warn' : ''}`} />{checkingCount ? `${checkingCount} 首检查中` : localPendingCount ? `${localPendingCount} 首本机待确认` : unavailableCount ? `${unavailableCount} 首本机暂不可播` : `${references.length} 首本机可播放`}</span><button className="console-action secondary" type="button" onClick={() => void refreshTracks(references, 'refresh')} disabled={Boolean(busy) || Boolean(validatingTrack) || !references.length}>{busy === 'refresh' ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}检查全部</button></div></header>
       <div className="music-resource-list">
         {references.length ? references.map((reference, index) => {
           const key = referenceKey(reference);
@@ -305,12 +301,12 @@ export default function MusicManager() {
           const lyric = lyricSettings[key] || { offsetMs: 0 };
           const expanded = expandedTrack === key;
           const preciseLyric = lyric.primary?.wordTimed || track?.lyric?.wordTimed;
-          const unavailable = isUnavailable(result);
+          const unavailable = Boolean(result?.error || track?.localAvailable === false);
           return <Fragment key={key}>
             <article className={unavailable ? 'is-unavailable' : undefined}>
               <span className="music-resource-index">{String(index + 1).padStart(2, '0')}</span>
               <MusicCover src={track?.cover || reference.cover} />
-              <div className="music-resource-copy"><strong>{track?.name || reference.name || (result?.error ? '资源暂不可用' : '正在读取歌曲')}</strong><span>{track ? `${track.artist}${track.album ? ` · ${track.album}` : ''}` : result?.error || key}</span><small><b data-source={reference.source}><MusicSourceIcon source={reference.source} size={12} />{reference.source === 'kugou' ? '酷狗' : '网易云'}</b> · {unavailable ? '完整音源暂不可用' : !result || result.checking ? '正在检查音源' : track?.playbackScope === 'account' ? '账号完整音源可用' : preciseLyric ? '音频可用 / KRC 逐字歌词' : '音频可用 / 普通歌词回退'} · {formatOffset(lyric.offsetMs)}</small>{unavailable && <em><CircleAlert size={13} />{playbackReasons[track?.playbackReason || ''] || '当前版本暂未获取完整音源，可使用本机账号播放'}</em>}</div>
+              <div className="music-resource-copy"><strong>{track?.name || reference.name || (result?.error ? '资源暂不可用' : '正在读取歌曲')}</strong><span>{track ? `${track.artist}${track.album ? ` · ${track.album}` : ''}` : result?.error || key}</span><small><b data-source={reference.source}><MusicSourceIcon source={reference.source} size={12} />{reference.source === 'kugou' ? '酷狗' : '网易云'}</b> · {!result || result.checking ? '正在检查本机音源' : unavailable ? '本机音源暂不可用' : track?.localAvailable ? preciseLyric ? '本机可播放 / KRC 逐字歌词' : '本机可播放 / 普通歌词回退' : '本机音源尚未确认'} · {formatOffset(lyric.offsetMs)}</small>{unavailable && <em><CircleAlert size={13} />{track?.localReason || result?.error || '本机音源检查失败，请重新检查'}</em>}</div>
               <div className="music-resource-actions"><button type="button" onClick={() => setPreview({ ...reference })} title="本机账号播放" aria-label={`本机播放 ${track?.name || reference.name || key}`}><Music2 size={15} /></button><button type="button" onClick={() => setExpandedTrack(expanded ? null : key)} title="歌词状态与校准" aria-label={`${track?.name || reference.name || key} 歌词设置`} aria-expanded={expanded}><Waves size={15} />{expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button><button type="button" onClick={() => move(index, -1)} disabled={index === 0} title="上移" aria-label={`上移 ${track?.name || key}`}><ArrowUp size={15} /></button><button type="button" onClick={() => move(index, 1)} disabled={index === references.length - 1} title="下移" aria-label={`下移 ${track?.name || key}`}><ArrowDown size={15} /></button><button type="button" onClick={() => remove(key)} title="移除" aria-label={`移除 ${track?.name || key}`}><Trash2 size={15} /></button></div>
             </article>
             {expanded && <div className="music-lyric-settings music-auto-lyric-settings">
@@ -322,7 +318,7 @@ export default function MusicManager() {
           </Fragment>;
         }) : <div className="structured-empty"><Music2 size={28} /><strong>播放列表还是空的</strong><span>从右侧选择网易云或酷狗，加入第一首歌。</span></div>}
       </div>
-      <div className="music-resource-footer"><span>{unavailableCount ? '曲目可以保存；访客可使用已配置的服务器账号音源。' : '访客可使用公开音源或已配置的服务器账号音源。'}</span><button className="console-action" type="button" onClick={() => void save()} disabled={Boolean(busy) || Boolean(validatingTrack) || Boolean(checkingCount)}>{busy === 'save' ? <LoaderCircle className="animate-spin" size={16} /> : <Save size={16} />}保存播放列表</button></div>
+      <div className="music-resource-footer"><span>{unavailableCount ? '曲目可以保存；访客可使用已配置的服务器账号音源。' : '访客可使用公开音源或已配置的服务器账号音源。'}</span><button className="console-action" type="button" onClick={() => void save()} disabled={Boolean(busy) || Boolean(validatingTrack)}>{busy === 'save' ? <LoaderCircle className="animate-spin" size={16} /> : <Save size={16} />}保存播放列表</button></div>
     </section>
 
     <section className="console-panel span-4 music-query-panel">

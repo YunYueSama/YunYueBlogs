@@ -2,20 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { connection } from 'next/server';
+import { cache } from 'react';
 
 const managerRoot = process.env.YUNYUE_MANAGER_ROOT
   ? path.resolve(process.env.YUNYUE_MANAGER_ROOT)
   : process.cwd();
 const workspaceRoot = path.join(/*turbopackIgnore: true*/ managerRoot, 'workspace');
 
-async function prepareWorkspace() {
+const prepareWorkspace = cache(async () => {
   await connection();
   const port = JSON.parse(fs.readFileSync(path.join(/*turbopackIgnore: true*/ managerRoot, 'public/backend_config.json'), 'utf8')).api_port;
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('后台连接配置无效，请重启控制台');
   const response = await fetch(`http://127.0.0.1:${port}/api/cloud/refresh`, { cache: 'no-store', signal: AbortSignal.timeout(60_000) });
   const result = await response.json();
   if (!response.ok || !result.ok) throw new Error(result.error?.message || '无法同步服务器内容，请稍后重试');
-}
+});
 
 const contentPaths = {
   posts: path.join(workspaceRoot, 'content', 'posts'),

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from cms_core.api import friends, gallery, moments, operations, projects
 from cms_core.workspace import read_json
+from cms_core import workspace as ws
 
 
 def response_json(response) -> dict:
@@ -27,6 +28,8 @@ def operation_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
     monkeypatch.setattr(operations, "DATA_ROOT", data)
     monkeypatch.setattr(operations, "OPERATIONS_FILE", workspace / "operations.json")
     monkeypatch.setattr(operations, "ensure_workspace", ensure)
+    # 临时工作区不能读取开发机真实的云端连接与版本配置。
+    monkeypatch.setattr(ws, "CONFIG_ROOT", workspace / 'config')
     monkeypatch.setattr(projects, "DATA_ROOT", data)
     monkeypatch.setattr(projects, "ensure_workspace", ensure)
     monkeypatch.setattr(gallery, "DATA_ROOT", data)

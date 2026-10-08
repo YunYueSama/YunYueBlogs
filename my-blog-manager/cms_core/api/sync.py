@@ -204,12 +204,16 @@ def apply_sync_plan(payload: ApplyRequest):
                 backup_root = temporary / "backup"
                 backed_up: set[str] = set()
 
-                for relative, source in files.items():
+                # 只暂存和备份实际变化文件，大型相册和文章库不重复复制全部内容。
+                changed_files = {relative: source for relative, source in files.items()
+                                 if not managed_destination(target, relative).is_file()
+                                 or file_digest(source) != file_digest(managed_destination(target, relative))}
+                for relative, source in changed_files.items():
                     staged = staged_root / Path(relative)
                     staged.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, staged)
 
-                for relative in set(files) | stale_files:
+                for relative in set(changed_files) | stale_files:
                     destination = managed_destination(target, relative)
                     if destination.exists() and not destination.is_file():
                         raise ValueError(f"受管目标不是普通文件：{relative}")
@@ -220,7 +224,7 @@ def apply_sync_plan(payload: ApplyRequest):
                         backed_up.add(relative)
 
                 try:
-                    for relative in files:
+                    for relative in changed_files:
                         destination = managed_destination(target, relative)
                         # 未变化文件保留 Git 的检出格式，避免只因换行与时间戳显示脏工作区。
                         if destination.is_file() and file_digest(files[relative]) == file_digest(destination):
@@ -241,7 +245,7 @@ def apply_sync_plan(payload: ApplyRequest):
                     }
                     write_json_atomic(manifest_path, manifest)
                 except Exception:
-                    for relative in set(files) | stale_files:
+                    for relative in set(changed_files) | stale_files:
                         destination = managed_destination(target, relative)
                         if destination.is_file():
                             destination.unlink()

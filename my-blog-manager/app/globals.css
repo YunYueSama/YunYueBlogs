@@ -259,9 +259,9 @@ a { color: inherit; text-decoration: none; }
 .music-resource-cover { width: 56px; height: 56px; overflow: hidden; background: #e9ebe8; display: grid; place-items: center; color: var(--console-muted); }
 .music-resource-cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .music-resource-copy { min-width: 0; }
-.music-resource-copy strong, .music-resource-copy span, .music-resource-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-resource-copy strong, .music-resource-copy > span, .music-resource-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-resource-copy strong { font-size: 14px; }
-.music-resource-copy span { margin-top: 4px; color: var(--console-muted); font-size: 11px; }
+.music-resource-copy > span { margin-top: 4px; color: var(--console-muted); font-size: 11px; }
 .music-resource-copy small { margin-top: 4px; color: var(--console-cyan); font: 700 9px/1 ui-monospace, monospace; }
 .music-resource-actions { display: flex; gap: 4px; }
 .music-resource-actions button { min-width: 32px; height: 32px; padding: 0 6px; border: 1px solid var(--console-line); background: white; display: flex; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
@@ -308,7 +308,8 @@ a { color: inherit; text-decoration: none; }
 .music-lyric-help { margin: 12px 0 0; display: flex; align-items: flex-start; gap: 7px; color: var(--console-muted); font-size: 10px; line-height: 1.6; }
 .music-lyric-help svg { flex: 0 0 auto; margin-top: 1px; }
 .music-resource-copy small b { padding: 2px 5px; background: #edf1ee; color: var(--console-muted); font-size: 8px; font-weight: 800; }
-.music-resource-copy small b[data-source='kugou'] { background: #e8f4f2; color: #087b72; }
+.music-resource-copy small b[data-source='netease'] { background: #fff1f2; color: #d93645; }
+.music-resource-copy small b[data-source='kugou'] { background: #eef7ff; color: #1689da; }
 .music-auto-lyric-settings { padding-bottom: 16px; }
 .music-auto-lyric-flow { display: flex; min-width: 0; align-items: center; gap: 7px; margin-bottom: 15px; padding: 10px 12px; border: 1px solid var(--console-line); background: white; overflow-x: auto; color: var(--console-muted); font: 600 9px/1.2 var(--font-geist-mono), monospace; white-space: nowrap; }
 .music-auto-lyric-flow i { color: var(--console-coral); font-style: normal; }

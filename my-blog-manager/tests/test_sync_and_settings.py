@@ -294,11 +294,10 @@ def test_kugou_validation_rejects_track_without_playback_url(monkeypatch: pytest
 def test_music_save_preserves_restricted_catalog_track_without_private_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_root = configure_music_workspace(tmp_path, monkeypatch)
     original = read_json(data_root / "site.json", {})
-    monkeypatch.setattr(settings_v2, "validate_track", lambda **_kwargs: {
-        "available": False,
-        "playbackSource": "kugou",
-        "reason": "copyright_or_region",
-    })
+    def offline(*args, **kwargs):
+        raise AssertionError("保存歌单不应访问外部音乐平台")
+    monkeypatch.setattr(music_validation, "validate_track", offline)
+    monkeypatch.setattr(music_validation.httpx, "get", offline)
     payload = settings_v2.MusicSettings(musicTracks=[
         settings_v2.MusicTrackReference(
             source="kugou",

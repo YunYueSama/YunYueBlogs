@@ -34,7 +34,8 @@ const server = http.createServer(async (request, response) => {
     let result;
     if (source === 'netease') {
       const cookieText = Object.entries(cookie).map(([key, value]) => `${key}=${value}`).join('; ');
-      result = await netease[action]({ ...params, cookie: cookieText, unblock: false });
+      // SDK 4.41.1 的默认 xeapi 依赖通用服务器初始化公钥；本机按需调用使用兼容的 eapi。
+      result = await netease[action]({ ...params, cookie: cookieText, unblock: false, timeout: 15000, ...(action === 'song_url_v1' ? { crypto: 'eapi' } : {}) });
     } else {
       const guid = cookie.KUGOU_API_GUID || crypto.createHash('md5').update(crypto.randomUUID()).digest('hex');
       const device = { ...cookie, KUGOU_API_GUID: guid, KUGOU_API_MID: calculateMid(guid), KUGOU_API_DEV: cookie.KUGOU_API_DEV || crypto.randomBytes(5).toString('hex').toUpperCase(), KUGOU_API_MAC: cookie.KUGOU_API_MAC || '02:00:00:00:00:00' };

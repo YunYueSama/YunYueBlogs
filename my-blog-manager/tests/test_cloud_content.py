@@ -100,3 +100,45 @@ def test_preview_ignores_windows_checkout_line_endings(tmp_path):
     assert sync.file_digest(server) == sync.file_digest(checkout)
     checkout.write_bytes(checkout.read_bytes() + '新内容'.encode('utf-8'))
     assert sync.file_digest(server) != sync.file_digest(checkout)
+
+
+def test_unchanged_remote_skips_object_reads_and_preserves_pending_edits(devices, monkeypatch):
+    first, second, content, data = devices
+    cloud.refresh(connect=True)
+    path = data / 'site.json'
+    path.write_text('{"musicIds":["pending"]}')
+    modified = path.stat().st_mtime_ns
+    commands = []
+    original = cloud._git
+    def observed(target, *args, **kwargs):
+        commands.append(args[0])
+        return original(target, *args, **kwargs)
+    monkeypatch.setattr(cloud, '_git', observed)
+    cloud.refresh(force=True)
+    assert commands == ['fetch', 'rev-parse']
+    assert path.stat().st_mtime_ns == modified
+    assert json.loads(path.read_text())['musicIds'] == ['pending']
+
+
+def test_batch_read_preserves_multiline_unicode_and_binary_lengths(devices):
+    first, second, content, data = devices
+    cloud.refresh(connect=True)
+    text = '标题\n正文\n\n中文与 emoji 🎵\n'
+    publish(second, 'posts/new.md', text)
+    cloud.refresh(force=True)
+    assert (content / 'posts/new.md').read_bytes() == text.encode('utf-8')
+
+
+def test_local_queue_autosave_does_not_fetch_remote(devices, monkeypatch):
+    from fastapi.testclient import TestClient
+    from cms_core.main import app
+    from cms_core.api import operations
+    cloud.refresh(connect=True)
+    monkeypatch.setattr(operations, 'OPERATIONS_FILE', ws.WORKSPACE_ROOT / 'operations.json')
+    def forbidden(*args, **kwargs):
+        raise AssertionError('本机队列自动保存不应同步远程')
+    monkeypatch.setattr(cloud, 'require_revision', forbidden)
+    monkeypatch.setattr(cloud, 'refresh', forbidden)
+    with TestClient(app) as client:
+        response = client.put('/api/operations', json={'operations': []})
+    assert response.status_code == 200

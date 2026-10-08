@@ -1,6 +1,20 @@
 let cachedBase: Promise<string> | undefined;
 let cloudRevision: string | undefined;
 export const currentCloudRevision = () => cloudRevision;
+const resourceRevisions = new Map<string, string>();
+const readOrders = new Map<string, number>();
+let requestOrder = 0;
+
+function contentResource(path: string) {
+  const clean = path.split('?')[0];
+  if (clean === '/api/settings/integrations') return undefined;
+  if (clean.startsWith('/api/settings/music')) return '/api/settings/music';
+  if (clean.startsWith('/api/settings/')) return clean;
+  const group = clean.match(/^\/api\/(gallery|projects|friends|moments|operations|sync)(?:\/|$)/);
+  if (group) return `/api/${group[1]}`;
+  if (clean === '/api/deploy/push' || clean === '/api/drafts/get' || clean === '/api/drafts/all_tags') return clean;
+  return undefined;
+}
 
 export function getApiBase() {
   if (!cachedBase) {
@@ -22,7 +36,13 @@ export async function managerApi<T>(path: string, init?: RequestInit): Promise<T
   const base = await getApiBase();
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const headers = new Headers(init?.headers);
-  if (cloudRevision) headers.set('X-YunYue-Revision', cloudRevision);
+  const resource = contentResource(path);
+  const reading = (init?.method || 'GET').toUpperCase() === 'GET' || path.split('?')[0] === '/api/drafts/get';
+  const order = ++requestOrder;
+  if (resource && reading) readOrders.set(resource, order);
+  // 每个编辑页面使用自己读取的版本，其他页面刷新不能替旧表单升级保存凭证。
+  const expected = resource ? resourceRevisions.get(resource) || cloudRevision : undefined;
+  if (expected && !headers.has('X-YunYue-Revision')) headers.set('X-YunYue-Revision', expected);
   if (init?.body && !isFormData && !headers.has('content-type')) headers.set('content-type', 'application/json');
   let response: Response;
   try {
@@ -38,11 +58,13 @@ export async function managerApi<T>(path: string, init?: RequestInit): Promise<T
   }
   const payload = await response.json().catch(() => null);
   const revision = response.headers.get('X-YunYue-Revision');
-  if (revision && cloudRevision && revision !== cloudRevision && path !== '/api/cloud/connect') {
-    throw new Error('服务器内容已更新，请刷新页面后再继续；尚未提交的输入请先保留。');
-  }
-  if (revision) cloudRevision = revision;
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error?.message || `请求失败（${response.status}）`);
   if (!payload || payload.ok !== true || !('data' in payload)) throw new Error('服务返回的数据格式异常，请重试或重启控制台');
+  if (revision && resource) {
+    if (reading && readOrders.get(resource) !== order) throw new Error('页面读取已被新的请求替代，请重试');
+    resourceRevisions.set(resource, revision);
+    // 队列可能来自服务端渲染的旧表单，保留会话基线，不能由无关账号请求更新。
+    cloudRevision ??= revision;
+  }
   return payload?.data as T;
 }

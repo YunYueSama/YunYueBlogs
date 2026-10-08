@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import re
 from typing import Annotated, Literal
 
 import httpx
@@ -105,6 +106,7 @@ def query_playback_status(
     album_audio_id: Annotated[str, Query(alias="albumAudioId", pattern=r"^\d{0,40}$")] = "",
     refresh: Annotated[bool, Query()] = False,
 ):
+    valid_id = bool(re.fullmatch(r"\d{1,20}" if source == "netease" else r"[A-Fa-f0-9]{32}", track_id))
     try:
         result = validate_track(
             source=source,
@@ -114,14 +116,17 @@ def query_playback_status(
             duration_ms=duration_ms,
             force=refresh,
         )
-        # 匿名缓存不能代表账号权益；账号检查结果不缓存，也不返回临时播放地址。
-        result = {**result, "playbackScope": "public"}
-        if not result.get("available") and result.get("reason") not in ("invalid_hash", "invalid_id"):
-            try:
-                music_accounts.private_playback(source, track_id, album_id=album_id, album_audio_id=album_audio_id)
-                result.update(available=True, playbackSource=source, playbackScope="account", reason="")
-            except ValueError:
-                pass
-        return ok(result)
     except (httpx.HTTPError, ValueError, TypeError):
-        return fail("music_validation_unavailable", "音源检查服务暂时不可用，请稍后重试。", 502)
+        result = {"available": False, "playbackSource": source, "reason": "service_unavailable"}
+    # 公开音源与本机账号播放独立检查；公开音源成功不能替代音符按钮的实际取源路径。
+    result = {**result, "playbackScope": "public", "localAvailable": False, "localReason": "歌曲 ID 或 Hash 格式无效"}
+    if valid_id and result.get("reason") not in ("invalid_hash", "invalid_id"):
+        try:
+            music_accounts.private_playback(source, track_id, album_id=album_id, album_audio_id=album_audio_id)
+            result.update(localAvailable=True, localReason="")
+            if not result.get("available"):
+                result.update(available=True, playbackSource=source, playbackScope="account", reason="")
+        except ValueError as error:
+            result["localReason"] = str(error)
+    # 账号状态不缓存，也不返回临时播放地址。
+    return JSONResponse({"ok": True, "data": result}, headers={"Cache-Control": "no-store"})

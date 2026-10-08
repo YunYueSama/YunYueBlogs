@@ -109,10 +109,20 @@ def cli(path: Path, linked: dict, args: list[str], *, value: str | None = None, 
 
 
 def cloud_config(path, linked):
-    envs = json.loads(cli(path, linked, ['env', 'ls', 'production', '--json'])).get('envs', [])
+    envs = json.loads(cli(path, linked, ['api', f"/v9/projects/{linked['projectId']}/env", '--raw'])).get('envs', [])
     envs = {env['key']: env for env in envs if 'production' in env.get('target', [])}
     def public_value(key, default):
-        value = envs.get(key, {}).get('value')
+        env = envs.get(key, {})
+        value = env.get('value')
+        # 列表中的 encrypted value 是密文；仅解密三个公开参数，绝不读取 API Key。
+        if env.get('type') == 'encrypted':
+            env_id = env.get('id', '')
+            if not isinstance(env_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', env_id):
+                return default
+            result = json.loads(cli(path, linked, ['api', f"/v1/projects/{linked['projectId']}/env/{env_id}", '--raw']))
+            value = result.get('value') if result.get('key') == key else None
+        elif env.get('type') == 'sensitive':
+            return default
         return value if isinstance(value, str) and value else default
     return {
         'projectName': linked['projectName'],

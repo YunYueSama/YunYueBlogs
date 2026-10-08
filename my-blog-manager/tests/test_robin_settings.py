@@ -54,6 +54,25 @@ def test_cloud_status_exposes_only_config_and_key_presence(monkeypatch):
     assert 'secret' not in json.dumps(result)
 
 
+def test_encrypted_model_is_decrypted_but_secret_is_not(monkeypatch):
+    calls = []
+    def command(path, linked, args):
+        calls.append(args)
+        if args[1].startswith('/v9/'):
+            return json.dumps({'envs': [
+                {'key': 'ROBIN_AI_FAST_MODEL', 'value': 'ciphertext', 'type': 'encrypted', 'id': 'env_model', 'target': ['production']},
+                {'key': 'DEEPSEEK_API_KEY', 'value': 'private-ciphertext', 'type': 'encrypted', 'id': 'env_secret', 'target': ['production']},
+            ]})
+        return json.dumps({'key': 'ROBIN_AI_FAST_MODEL', 'value': 'actual-model'})
+    monkeypatch.setattr(robin, 'cli', command)
+    result = robin.cloud_config(Path('.'), {'projectName': 'blog', 'projectId': 'prj_test'})
+    assert result['fastModel'] == 'actual-model'
+    assert result['apiKeyConfigured'] is True
+    assert len(calls) == 2
+    assert all('env_secret' not in args[1] for args in calls)
+    assert 'ciphertext' not in json.dumps(result)
+
+
 def test_sync_failure_never_leaks_key_or_starts_deployment(storage, monkeypatch):
     calls = []
     def command(path, linked, args, **kwargs):

@@ -292,7 +292,7 @@ def test_kugou_validation_rejects_track_without_playback_url(monkeypatch: pytest
     assert result["name"] == "久遠寺有珠"
 
 
-def test_music_save_rejects_unplayable_track_before_writing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_music_save_preserves_restricted_catalog_track_without_private_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_root = configure_music_workspace(tmp_path, monkeypatch)
     original = read_json(data_root / "site.json", {})
     monkeypatch.setattr(settings_v2, "validate_track", lambda **_kwargs: {
@@ -311,9 +311,11 @@ def test_music_save_rejects_unplayable_track_before_writing(tmp_path: Path, monk
 
     response = settings_v2.save_music_settings(payload)
 
-    assert response.status_code == 422
-    assert response_json(response)["error"]["code"] == "music_tracks_unavailable"
-    assert read_json(data_root / "site.json", {}) == original
+    assert response.status_code == 200
+    stored = read_json(data_root / "site.json", {})
+    assert stored != original
+    assert stored['musicTracks'][0]['id'] == 'BF25EEA67F30CA66142F51F0AAB9FF3D'
+    assert 'url' not in stored['musicTracks'][0]
 
 
 def test_kugou_lyrics_follow_search_download_decode_parse_chain(monkeypatch: pytest.MonkeyPatch) -> None:

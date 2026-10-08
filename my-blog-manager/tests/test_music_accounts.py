@@ -27,16 +27,20 @@ def history(received):
     return {'body': {'status': 1, 'data': {'list': [{'day': datetime.now(accounts.CHINA).date().isoformat(), 'receive_vip': int(received)}]}}}
 
 
+def vip(active=True):
+    return {'body': {'status': 1, 'busi_vip': [{'busi_type': 'concept', 'product_type': 'svip', 'is_vip': int(active)}]}}
+
+
 def test_existing_record_does_not_claim_again(local_account, monkeypatch):
     calls = []
     def gateway(source, action, **kwargs):
         calls.append(action)
-        return history(True)
+        return vip() if action == 'user_vip_detail' else history(True)
     monkeypatch.setattr(accounts, 'gateway', gateway)
     assert accounts.claim_daily()['status'] == 'claimed'
-    assert calls == ['youth_month_vip_record', 'youth_month_vip_record']
+    assert calls == ['youth_month_vip_record', 'youth_month_vip_record', 'user_vip_detail']
     accounts.claim_daily()
-    assert len(calls) == 2
+    assert len(calls) == 3
 
 
 def test_claim_requires_confirmation_not_just_acceptance(local_account, monkeypatch):
@@ -53,9 +57,36 @@ def test_claim_requires_confirmation_not_just_acceptance(local_account, monkeypa
 
 
 def test_confirmed_claim(local_account, monkeypatch):
-    replies = iter([history(False), {'body': {'status': 1}}, history(True)])
+    replies = iter([history(False), {'body': {'status': 1}}, history(True), vip()])
     monkeypatch.setattr(accounts, 'gateway', lambda *args, **kwargs: next(replies))
     assert accounts.claim_daily()['status'] == 'claimed'
+
+
+def test_daily_upgrade_requires_concept_svip_confirmation_and_runs_once(local_account, monkeypatch):
+    basic = history(True)
+    basic['body']['data']['list'][0]['vip_type'] = 'tvip'
+    calls = []
+    def gateway(source, action, params=None, cookie=None):
+        calls.append(action)
+        if action == 'youth_day_vip_upgrade':
+            return {'body': {'status': 1}}
+        return vip(False) if action == 'user_vip_detail' else basic
+    monkeypatch.setattr(accounts, 'gateway', gateway)
+    assert accounts.claim_daily()['status'] == 'record_confirmed'
+    assert calls.count('youth_day_vip_upgrade') == 1
+    assert 'youth_day_vip' not in calls
+    accounts.claim_daily(force=True)
+    assert calls.count('youth_day_vip_upgrade') == 1
+
+
+def test_daily_claim_sends_current_china_date(local_account, monkeypatch):
+    def gateway(source, action, params=None, cookie=None):
+        if action == 'youth_day_vip':
+            assert params['receive_day'] == datetime.now(accounts.CHINA).date().isoformat()
+            return {'body': {'status': 0}}
+        return history(False)
+    monkeypatch.setattr(accounts, 'gateway', gateway)
+    assert accounts.claim_daily()['status'] == 'failed'
 
 
 def test_history_failure_prevents_claim(local_account, monkeypatch):
@@ -106,6 +137,35 @@ def test_trial_is_not_complete_audio(local_account, monkeypatch):
     monkeypatch.setattr(accounts, 'gateway', lambda *args, **kwargs: {'body': {'data': [{'url': 'https://example.org/trial', 'freeTrialInfo': {'end': 30}}]}})
     with pytest.raises(ValueError, match='只能试听'):
         accounts.private_playback('netease', '501660')
+
+
+def test_kugou_preview_passes_catalog_ids_and_cookie(local_account, monkeypatch):
+    calls = []
+    def gateway(source, action, params, cookie):
+        calls.append((source, action, params, cookie))
+        return {'body': {'data': {'url': ['https://example.org/full.mp3']}}}
+    monkeypatch.setattr(accounts, 'gateway', gateway)
+    assert accounts.private_playback('kugou', 'A' * 32, album_id='123', album_audio_id='456')['url'].endswith('/full.mp3')
+    assert calls[0][2]['album_id'] == '123'
+    assert calls[0][2]['album_audio_id'] == '456'
+    assert calls[0][3]['token'] == 'private-test-token'
+
+
+def test_kugou_preview_rejects_trial(local_account, monkeypatch):
+    monkeypatch.setattr(accounts, 'gateway', lambda *args, **kwargs: {'body': {'data': {'url': ['https://example.org/trial'], 'is_free_part': 1}}})
+    with pytest.raises(ValueError, match='只能试听'):
+        accounts.private_playback('kugou', 'A' * 32)
+
+
+def test_kugou_catalog_mismatch_retries_hash_without_catalog_ids(local_account, monkeypatch):
+    calls = []
+    def gateway(source, action, params, cookie):
+        calls.append(params)
+        return {'body': {'error_code': 35104}} if len(calls) == 1 else {'body': {'url': ['https://example.org/full.mp3']}}
+    monkeypatch.setattr(accounts, 'gateway', gateway)
+    assert accounts.private_playback('kugou', 'A' * 32, album_audio_id='456')['url'].endswith('/full.mp3')
+    assert calls[1]['album_audio_id'] == '0'
+    assert calls[1]['hash'] == calls[0]['hash']
 
 
 def test_windows_storage_is_protected(local_account):

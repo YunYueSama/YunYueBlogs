@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 import re
 from urllib.parse import urlsplit
-from fastapi import APIRouter, Path, Request, HTTPException, Depends
+from fastapi import APIRouter, Path, Query, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from cms_core import music_accounts as accounts
@@ -74,10 +74,10 @@ def logout(source: Source):
 
 
 @router.get('/{source}/preview/{track_id}')
-def preview(source: Source, track_id: str):
+def preview(source: Source, track_id: str, album_id: Annotated[str, Query(alias='albumId', pattern=r'^\d{0,40}$')] = '', album_audio_id: Annotated[str, Query(alias='albumAudioId', pattern=r'^\d{0,40}$')] = ''):
     if not re.fullmatch(r'\d{1,20}' if source == 'netease' else r'[A-Fa-f0-9]{32}', track_id):
         return JSONResponse({'ok': False, 'error': {'message': '歌曲 ID 或 Hash 格式无效'}}, status_code=400)
-    return invoke(lambda: accounts.private_playback(source, track_id))
+    return invoke(lambda: accounts.private_playback(source, track_id, album_id=album_id, album_audio_id=album_audio_id))
 
 
 class DailyPreference(BaseModel):

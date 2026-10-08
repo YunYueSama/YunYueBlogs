@@ -121,6 +121,7 @@ def overview() -> dict:
                      'nickname': value.get(source, {}).get('nickname', ''),
                      'autoDailyVip': bool(value.get(source, {}).get('autoDailyVip')),
                      'scheduler': value.get(source, {}).get('scheduler', {}),
+                     'membership': value.get(source, {}).get('membership', {}),
                      'daily': value.get(source, {}).get('daily', {})}
             for source in ('netease', 'kugou')}
 
@@ -273,12 +274,15 @@ def logout(source: str) -> None:
                     del collection[key]
 
 
-def private_playback(source: str, track_id: str) -> dict:
+def private_playback(source: str, track_id: str, *, album_id: str = '', album_audio_id: str = '') -> dict:
     account = state().get(source, {})
     if not account.get('cookie'):
-        raise ValueError('请先扫码登录对应的音乐账号')
-    params = {'id': track_id, 'level': 'standard'} if source == 'netease' else {'hash': track_id, 'quality': '128', 'free_part': False}
+        raise ValueError('请先登录对应的音乐账号，可选择扫码或手机号登录')
+    params = {'id': track_id, 'level': 'standard'} if source == 'netease' else {'hash': track_id, 'quality': '128', 'free_part': False, 'album_id': album_id or '0', 'album_audio_id': album_audio_id or '0'}
     result = gateway(source, 'song_url_v1' if source == 'netease' else 'song_url', params, account['cookie'])['body']
+    if source == 'kugou' and result.get('error_code') == 35104 and (album_id or album_audio_id):
+        # 搜索目录的 Audioid 不一定是播放目录标识；仅在明确 Hash not found 时回退原 Hash。
+        result = gateway(source, 'song_url', {**params, 'album_id': '0', 'album_audio_id': '0'}, account['cookie'])['body']
     if source == 'netease':
         row = (result.get('data') or [{}])[0]
         if row.get('freeTrialInfo'):
@@ -286,6 +290,8 @@ def private_playback(source: str, track_id: str) -> dict:
         url = row.get('url')
     else:
         data = result.get('data') if isinstance(result.get('data'), dict) else result
+        if data.get('is_free_part') or data.get('free_part') or data.get('hash_offset'):
+            raise ValueError('当前账号只能试听，完整播放需要对应会员或购买权益')
         urls = data.get('url') or data.get('play_url') or ''
         url = urls[0] if isinstance(urls, list) and urls else urls
     if not isinstance(url, str) or not url.startswith(('https://', 'http://')):
@@ -301,6 +307,19 @@ def today_record(body: dict, today: str) -> dict | None:
     return next((row for row in rows if isinstance(row, dict) and row.get('day') == today and row.get('receive_vip') == 1), None)
 
 
+def concept_membership(cookie: dict) -> dict:
+    body = gateway('kugou', 'user_vip_detail', cookie=cookie)['body']
+    if body.get('status') != 1:
+        return {'status': 'unknown', 'message': '概念版会员权益暂时无法核实'}
+    data = body.get('data') if isinstance(body.get('data'), dict) else body
+    rows = data.get('busi_vip')
+    if not isinstance(rows, list):
+        return {'status': 'unknown', 'message': '概念版会员权益暂时无法核实'}
+    active = [row.get('product_type') for row in rows if isinstance(row, dict) and row.get('busi_type') == 'concept' and row.get('is_vip') == 1]
+    products = [name for name in ('tvip', 'svip') if name in active]
+    return {'status': 'active' if products else 'inactive', 'products': products, 'message': '概念版权益已确认：' + '、'.join(products) if products else '平台尚未确认概念版会员权益'}
+
+
 def claim_daily(*, force: bool = False) -> dict:
     today = datetime.now(CHINA).date().isoformat()
     # 跨日后台任务和手动按钮共用串行锁，领取前后均核对平台记录。
@@ -310,7 +329,7 @@ def claim_daily(*, force: bool = False) -> dict:
         if not account.get('cookie'):
             raise ValueError('请先登录酷狗概念版账号')
         previous = account.get('daily', {})
-        if not force and previous.get('date') == today and (previous.get('status') == 'claimed' or time.time() - previous.get('attemptedAt', 0) < 3600):
+        if not force and previous.get('date') == today and (previous.get('status') == 'claimed' and previous.get('rewardLevel') == 'svip' or time.time() - previous.get('attemptedAt', 0) < 3600):
             return previous
         cookie = account['cookie']
         outcome = {'date': today, 'status': 'pending', 'message': '正在核实平台领取记录'}
@@ -326,13 +345,27 @@ def claim_daily(*, force: bool = False) -> dict:
                 account['daily'] = {**outcome, 'attemptedAt': time.time()}
                 save(value)
                 submission_uncertain = True
-                result = gateway('kugou', 'youth_day_vip', cookie=cookie)['body']
+                result = gateway('kugou', 'youth_day_vip', {'receive_day': today}, cookie=cookie)['body']
                 submission_uncertain = False
                 if result.get('status') != 1:
                     raise ValueError('平台未确认领取成功，请在概念版查看资格或完成必要操作')
             checked = gateway('kugou', 'youth_month_vip_record', cookie=cookie)['body']
-            if checked.get('status') == 1 and today_record(checked, today):
-                outcome = {'date': today, 'status': 'claimed', 'message': '平台记录已确认今日福利到账'}
+            verified_record = today_record(checked, today) if checked.get('status') == 1 else None
+            if verified_record:
+                membership = concept_membership(cookie)
+                upgrade = account.get('rewardUpgrade', {})
+                if verified_record.get('vip_type') == 'tvip' and 'svip' not in membership.get('products', []) and upgrade.get('date') != today:
+                    # 正常奖励升级接口；不调用广告播放上报，也不伪造听歌时长。
+                    # 请求前保存意图，网络结果不明时只查询权益，避免重复提交。
+                    account['rewardUpgrade'] = {'date': today, 'status': 'pending'}
+                    save(value)
+                    upgraded = gateway('kugou', 'youth_day_vip_upgrade', cookie=cookie)['body']
+                    account['rewardUpgrade']['status'] = 'submitted' if upgraded.get('status') == 1 else 'rejected'
+                    save(value)
+                    membership = concept_membership(cookie)
+                account['membership'] = membership
+                svip = 'svip' in membership.get('products', [])
+                outcome = {'date': today, 'status': 'claimed' if svip else 'record_confirmed', 'rewardLevel': 'svip' if svip else 'basic', 'message': '今日领取记录与概念版 SVIP 权益均已确认' if svip else '今日领取记录已确认，但概念版 SVIP 尚未确认；请在官方 App 核实奖励资格或完成所需操作'}
             else:
                 outcome = {'date': today, 'status': 'unconfirmed', 'message': '平台已受理，领取记录尚未确认，请稍后手动核实'}
         except ValueError as error:

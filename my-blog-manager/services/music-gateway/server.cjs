@@ -13,7 +13,7 @@ const token = process.env.MUSIC_GATEWAY_TOKEN;
 if (!token) throw new Error('缺少本机服务认证配置');
 const routes = {
   netease: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'captcha_sent', 'login_cellphone', 'login_status', 'song_url_v1']),
-  kugou: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'captcha_sent', 'login_cellphone', 'user_detail', 'user_vip_detail', 'song_url', 'youth_month_vip_record', 'youth_day_vip']),
+  kugou: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'captcha_sent', 'login_cellphone', 'user_detail', 'user_vip_detail', 'song_url', 'youth_month_vip_record', 'youth_day_vip', 'youth_day_vip_upgrade']),
 };
 const server = http.createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json; charset=utf-8');

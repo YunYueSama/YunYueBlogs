@@ -228,10 +228,8 @@ def save_music_settings(payload: MusicSettings):
                 unavailable.append(track.name.strip() or track.id)
     except (httpx.HTTPError, OSError, ValueError, TypeError):
         return fail("music_validation_unavailable", "音源检查服务暂时不可用，未保存播放列表。", 503)
-    if unavailable:
-        names = "、".join(unavailable[:3])
-        suffix = "等歌曲" if len(unavailable) > 3 else ""
-        return fail("music_tracks_unavailable", f"{names}{suffix} 当前没有可用音源，请移除或更换版本后再保存。", 422)
+    # 歌单保存的是歌曲标识；服务端账号可能拥有匿名检查没有的权益。
+    # 不把缺少匿名音源当作配置非法，运行时仍须核对完整音源。
     site["musicIds"] = payload.musicIds
     site["musicTracks"] = [track.model_dump() for track in payload.musicTracks]
     write_json_atomic(DATA_ROOT / "site.json", site)

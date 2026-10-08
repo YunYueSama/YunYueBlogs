@@ -1,17 +1,17 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- 二维码由本机音乐服务生成。 */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Gift, Headphones, LoaderCircle, LogOut, QrCode, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { Gift, Headphones, LoaderCircle, LogOut, QrCode, RefreshCw, ShieldCheck, Smartphone, X } from 'lucide-react';
 import MusicSourceIcon from './MusicSourceIcon';
 import { managerApi } from '../../lib/managerApi';
 
 type Source = 'netease' | 'kugou';
-type Account = { loggedIn: boolean; nickname: string; autoDailyVip: boolean; daily?: { status?: string; message?: string; date?: string }; scheduler?: { enabled?: boolean; message?: string } };
+type Account = { loggedIn: boolean; nickname: string; autoDailyVip: boolean; daily?: { status?: string; message?: string; date?: string }; membership?: { status?: string; message?: string }; scheduler?: { enabled?: boolean; message?: string } };
 type Overview = Record<Source, Account>;
 type QR = { loginId: string; image: string; expiresIn: number };
 const names = { netease: '网易云音乐', kugou: '酷狗概念版' };
 
-export default function MusicAccounts({ preview }: { preview?: { source: Source; id: string; name?: string } | null }) {
+export default function MusicAccounts({ preview, onClosePreview }: { preview?: { source: Source; id: string; name?: string; albumId?: string; albumAudioId?: string } | null; onClosePreview?: () => void }) {
   const [accounts, setAccounts] = useState<Overview | null>(null);
   const [qr, setQr] = useState<(QR & { source: Source }) | null>(null);
   const [phoneSource, setPhoneSource] = useState<Source | null>(null);
@@ -25,6 +25,8 @@ export default function MusicAccounts({ preview }: { preview?: { source: Source;
   const [audio, setAudio] = useState('');
   const [previewName, setPreviewName] = useState('');
   const [audioTrack, setAudioTrack] = useState('');
+  const [previewState, setPreviewState] = useState<{ loading: boolean; message: string }>({ loading: false, message: '' });
+  const audioRef = useRef<HTMLAudioElement>(null);
   const generation = useRef(0);
   const alive = useRef(true);
   const refresh = useCallback(async () => {
@@ -94,11 +96,19 @@ export default function MusicAccounts({ preview }: { preview?: { source: Source;
     const current = ++generation.current;
     if (!preview) return;
     const controller = new AbortController();
-    void managerApi<{ url: string; message: string }>(`/api/music/accounts/${preview.source}/preview/${preview.id}`, { signal: controller.signal })
-      .then((result) => { if (current === generation.current) { setAudioTrack(`${preview.source}:${preview.id}`); setPreviewName(preview.name || preview.id); setAudio(result.url); setMessage(result.message); } })
-      .catch((error: Error) => { if (!controller.signal.aborted && current === generation.current) { setAudio(''); setMessage(error.message); } });
+    setAudio('');
+    setPreviewState({ loading: true, message: '正在使用已登录账号获取音源…' });
+    const params = new URLSearchParams({ albumId: preview.albumId || '', albumAudioId: preview.albumAudioId || '' });
+    void managerApi<{ url: string; message: string }>(`/api/music/accounts/${preview.source}/preview/${preview.id}?${params}`, { signal: controller.signal })
+      .then((result) => { if (current === generation.current) { setAudioTrack(`${preview.source}:${preview.id}`); setPreviewName(preview.name || preview.id); setAudio(result.url); setPreviewState({ loading: false, message: result.message }); } })
+      .catch((error: Error) => { if (!controller.signal.aborted && current === generation.current) { setAudio(''); setPreviewState({ loading: false, message: error.message }); } });
     return () => controller.abort();
   }, [preview]);
+
+  useEffect(() => {
+    if (!preview || !audio || audioTrack !== `${preview.source}:${preview.id}`) return;
+    void audioRef.current?.play().catch(() => setPreviewState({ loading: false, message: '音源已就绪，请点击播放器的播放按钮开始试听。' }));
+  }, [audio, audioTrack, preview]);
 
   return <section className="console-panel span-12 music-accounts">
     <header><div><h2><Headphones size={19} />我的音乐账号</h2><span>登录你的音乐平台，让歌单与账号权益各就其位。</span></div><span className="music-local-badge"><ShieldCheck size={14} />仅保存在本机</span></header>
@@ -112,6 +122,7 @@ export default function MusicAccounts({ preview }: { preview?: { source: Source;
           <strong><Gift size={16} />每日会员福利</strong>
           <label className="music-daily-toggle"><input type="checkbox" checked={account.autoDailyVip} disabled={busy} onChange={(event) => void run(() => managerApi('/api/music/accounts/kugou/daily', { method: 'PUT', body: JSON.stringify({ enabled: event.target.checked }) }))} />每天自动领取会员福利</label>
           <p>{account.daily?.date && `${account.daily.date} · `}{account.daily?.message || '领取前后会核对平台记录，仅在记录确认后显示到账'}</p>
+          {account.membership?.message && <p>{account.membership.message}</p>}
           <details><summary>后台检查与领取说明</summary><small>{account.scheduler?.message || '窗口运行期间会自动检查领取资格'}</small></details>
           <button type="button" className="console-action secondary" disabled={busy} onClick={() => void run(async () => { const result = await managerApi<{ message: string }>('/api/music/accounts/kugou/daily', { method: 'POST' }); setMessage(result.message); })}><RefreshCw size={15} />领取 / 核实今日福利</button>
         </div>}
@@ -126,7 +137,7 @@ export default function MusicAccounts({ preview }: { preview?: { source: Source;
       <small>只向对应音乐平台发送手机号和验证码，凭据加密保存在本机。若平台要求安全验证，请在官方手机端完成。</small>
     </form>}
     {message && <p className="console-note" role="status">{message}</p>}
-    {audio && audioTrack === `${preview?.source}:${preview?.id}` && <div className="music-private-preview"><strong>本机试听 · {previewName}</strong><audio controls src={audio} preload="none" onError={() => { setAudio(''); setMessage('音源已失效或连接失败，请再次点击本机试听'); }} /></div>}
-    <p className="console-note">账号权益仅用于本机试听。公开博客始终使用匿名音源；会员歌曲能否完整播放取决于当前账号权益。每日福利遵守平台领取资格，必要时请在手机端完成操作。</p>
+    {preview && <div className="music-private-preview" role="region" aria-label="本机账号试听"><div className="music-preview-heading"><MusicSourceIcon source={preview.source} size={24} /><strong>本机试听 · {preview.name || previewName || preview.id}</strong><button className="console-icon" type="button" aria-label="关闭试听" onClick={onClosePreview}><X size={18} /></button></div><p role="status">{previewState.loading ? <LoaderCircle size={16} className="animate-spin" /> : null}{previewState.message}</p>{audio && audioTrack === `${preview.source}:${preview.id}` && <audio ref={audioRef} controls src={audio} preload="metadata" onError={() => { setAudio(''); setPreviewState({ loading: false, message: '音源已失效或连接失败，请再次点击歌曲旁的音符按钮重试。' }); }} />}</div>}
+    <p className="console-note">本机账号用于试听；公开博客可单独配置 Vercel 服务端账号。会员歌曲能否完整播放取决于该账号的有效权益。退出本机账号不会删除 Vercel 中的凭据。每日福利遵守平台领取资格，必要时请在官方 App 完成操作。</p>
   </section>;
 }

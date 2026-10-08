@@ -123,7 +123,7 @@ export default function MusicAccounts({ preview, onClosePreview }: { preview?: {
           <label className="music-daily-toggle"><input type="checkbox" checked={account.autoDailyVip} disabled={busy} onChange={(event) => void run(() => managerApi('/api/music/accounts/kugou/daily', { method: 'PUT', body: JSON.stringify({ enabled: event.target.checked }) }))} />每天自动领取会员福利</label>
           <p>{account.daily?.date && `${account.daily.date} · `}{account.daily?.message || '领取前后会核对平台记录，仅在记录确认后显示到账'}</p>
           {account.membership?.message && <p>{account.membership.message}</p>}
-          <details><summary>后台检查与领取说明</summary><small>{account.scheduler?.message || '窗口运行期间会自动检查领取资格'}</small></details>
+          <details><summary>后台检查与领取说明</summary><small>{'窗口运行期间自动检查领取资格；关闭管理窗口后停止全部本机服务'}</small></details>
           <button type="button" className="console-action secondary" disabled={busy} onClick={() => void run(async () => { const result = await managerApi<{ message: string }>('/api/music/accounts/kugou/daily', { method: 'POST' }); setMessage(result.message); })}><RefreshCw size={15} />领取 / 核实今日福利</button>
         </div>}
       </article>;

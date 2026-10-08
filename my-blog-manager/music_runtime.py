@@ -51,62 +51,32 @@ def stop_gateway(process):
             process.kill()
 
 
+_legacy_disabled = False
+
+
 def configure_daily_task(enabled):
-    """当前 Windows 用户登录时运行，不保存 Windows 密码或提升权限。"""
-    if os.name != 'nt':
-        return {'enabled': False, 'message': '当前系统仅支持窗口运行期间自动检查'}
-    import hashlib
-    import sys
-    name = 'YunYueMusicDaily-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:12]
-    def quote(value):
-        return "'" + str(value).replace("'", "''") + "'"
-    if enabled:
-        python = Path(sys.executable).with_name('pythonw.exe')
-        if not python.exists():
-            return {'enabled': False, 'message': '未找到 pythonw.exe，窗口运行期间仍会自动检查'}
+    """自动领取仅在管理窗口运行时检查，同时移除旧版本的常驻任务。"""
+    global _legacy_disabled
+    if os.name == 'nt' and not _legacy_disabled:
+        import hashlib
+        import winreg
+        name = 'YunYueMusicDaily-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:12]
+        quoted = "'" + name.replace("'", "''") + "'"
         script = (
             "$ErrorActionPreference='Stop';"
-            f"$action=New-ScheduledTaskAction -Execute {quote(python)} -Argument {quote(chr(34) + str(ROOT / 'music_daily_worker.py') + chr(34))} -WorkingDirectory {quote(ROOT)};"
-            "$daily=New-ScheduledTaskTrigger -Daily -At '09:05';"
-            "$logon=New-ScheduledTaskTrigger -AtLogOn -User ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name);"
-            "$settings=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5);"
-            "$principal=New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited;"
-            f"Register-ScheduledTask -TaskName {quote(name)} -Action $action -Trigger @($daily,$logon) -Settings $settings -Principal $principal -Force | Out-Null"
+            f"if(Get-ScheduledTask -TaskName {quoted} -ErrorAction SilentlyContinue){{"
+            f"Stop-ScheduledTask -TaskName {quoted} -ErrorAction SilentlyContinue;"
+            f"Unregister-ScheduledTask -TaskName {quoted} -Confirm:$false}}"
         )
-    else:
-        script = f"$ErrorActionPreference='Stop';if(Get-ScheduledTask -TaskName {quote(name)} -ErrorAction SilentlyContinue){{Unregister-ScheduledTask -TaskName {quote(name)} -Confirm:$false}}"
-    try:
-        result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
-                                capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
-        if result.returncode:
-            raise ValueError()
-        if not enabled:
-            configure_startup_worker(False, name)
-        return {'enabled': enabled, 'message': '每天 09:05 及登录 Windows 时检查；电脑需开机且当前用户已登录' if enabled else '已关闭后台每日任务'}
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        return configure_startup_worker(enabled, name)
-
-
-def configure_startup_worker(enabled, name):
-    # 某些电脑拒绝注册计划任务，改用当前用户启动项，无需管理员权限。
-    import sys
-    import winreg
-    python = Path(sys.executable).with_name('pythonw.exe')
-    if enabled and not python.exists():
-        return {'enabled': False, 'message': '未找到 pythonw.exe，窗口运行期间仍会自动检查'}
-    try:
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run') as registry:
-            if enabled:
-                command = subprocess.list2cmdline([str(python), str(ROOT / 'music_daily_worker.py'), '--resident'])
-                winreg.SetValueEx(registry, name, 0, winreg.REG_SZ, command)
-                subprocess.Popen([str(python), str(ROOT / 'music_daily_worker.py'), '--resident'], cwd=ROOT,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
+        try:
+            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
+                                    capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run') as registry:
                 try:
                     winreg.DeleteValue(registry, name)
                 except FileNotFoundError:
                     pass
-        return {'enabled': enabled, 'mode': 'startup', 'message': '已启用当前用户后台每日检查；登录 Windows 后自动运行，关闭管理窗口仍有效' if enabled else '已关闭后台每日任务'}
-    except OSError:
-        return {'enabled': False, 'message': '系统拒绝设置后台任务；窗口运行期间仍会自动检查'}
+            _legacy_disabled = result.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return {'enabled': enabled, 'mode': 'desktop', 'message': '管理窗口运行期间自动检查；关闭窗口后停止'}

@@ -1,4 +1,8 @@
 import os
+import subprocess
+import sys
+import time
+import pytest
 
 from desktop_runtime import sync_assets
 
@@ -24,3 +28,36 @@ def test_missing_asset_source_does_not_delete_target(tmp_path):
     existing.write_text("keep", encoding="utf-8")
     assert sync_assets(str(tmp_path / "missing"), str(target)) == 0
     assert existing.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows Job 生命周期验证')
+def test_desktop_exit_terminates_child_process(tmp_path):
+    import ctypes
+    from ctypes import wintypes
+    pid_file = tmp_path / 'child.pid'
+    script = (
+        'import os, subprocess, sys; from desktop_runtime import contain_process_tree; '
+        'contain_process_tree(); '
+        'p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); '
+        f'open({str(pid_file)!r},"w").write(str(p.pid)); '
+        'os._exit(0)'
+    )
+    subprocess.run([sys.executable, '-c', script], check=True, timeout=10)
+    pid = int(pid_file.read_text())
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    for _ in range(50):
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return
+        code = wintypes.DWORD()
+        kernel.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel.CloseHandle(handle)
+        if code.value != 259:
+            return
+        time.sleep(.1)
+    subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], capture_output=True)
+    pytest.fail('桌面进程退出后子进程仍在运行')

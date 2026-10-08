@@ -38,27 +38,23 @@ def check_node_environment():
 
 def ensure_frontend_build():
     """Builds the standalone frontend when it is missing or older than source files."""
-    server_js = os.path.join(".next", "standalone", "server.js")
-    source_roots = ("app", "components", "context", "lib")
-    watched_files = ("package.json", "package-lock.json", "next.config.ts", "tsconfig.json")
-
-    source_files = [path for path in watched_files if os.path.exists(path)]
-    for root in source_roots:
-        if not os.path.isdir(root):
-            continue
-        for current, _, files in os.walk(root):
-            source_files.extend(os.path.join(current, name) for name in files)
-
-    build_time = os.path.getmtime(server_js) if os.path.exists(server_js) else 0
-    source_time = max((os.path.getmtime(path) for path in source_files), default=0)
-
-    if build_time >= source_time:
+    from pathlib import Path
+    import uuid
+    from frontend_runtime import source_digest, build_state, active_build_dir, activate_build
+    root = Path.cwd()
+    digest = source_digest(root)
+    state = build_state(root)
+    active = active_build_dir(root)
+    if state.get('sourceDigest') == digest and state.get('directory') == active.name and (active / 'standalone/server.js').is_file():
         print("✅ 前端生产构建已是最新版本。")
         return True
 
     print("🏗️ 前端构建缺失或已过期，正在生成稳定的桌面版产物...")
     try:
-        subprocess.check_call(["npm", "run", "build"], shell=True)
+        directory = root / ('.next-desktop-' + uuid.uuid4().hex[:12])
+        env = {**os.environ, 'YUNYUE_BUILD_DIR': directory.name}
+        subprocess.check_call(['npm.cmd' if os.name == 'nt' else 'npm', 'run', 'build'], env=env)
+        activate_build(root, directory, digest)
         print("✅ 前端生产构建完成。")
         return True
     except Exception as error:

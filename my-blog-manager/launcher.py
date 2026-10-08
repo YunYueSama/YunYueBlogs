@@ -17,11 +17,12 @@ import socket
 import json
 import subprocess
 import traceback
-from desktop_runtime import claim_instance, sync_assets
+from desktop_runtime import claim_instance, sync_assets, contain_process_tree
+from frontend_runtime import active_build_dir
 from cms_core.main import app
 from cms_core.music_accounts import auto_daily_loop
 from cms_core.workspace import CONFIG_ROOT
-from music_runtime import start_gateway, stop_gateway
+from music_runtime import start_gateway, stop_gateway, configure_daily_task
 
 frontend_process = None
 api_server = None
@@ -29,6 +30,7 @@ api_thread = None
 music_process = None
 music_stop = threading.Event()
 WINDOW_CONFIG_FILE = os.path.join(EXE_DIR, 'window_config.json')
+FRONTEND_BUILD = active_build_dir(BASE_DIR)
 
 def load_window_size():
     try:
@@ -58,17 +60,17 @@ def write_port_config(port):
     with open(os.path.join(public_dir, 'backend_config.json'), 'w', encoding='utf-8') as f:
         json.dump({"api_port": port}, f)
 
-    standalone_public = os.path.join(BASE_DIR, '.next', 'standalone', 'public')
-    if os.path.exists(os.path.join(BASE_DIR, '.next', 'standalone')):
+    standalone_public = str(FRONTEND_BUILD / 'standalone/public')
+    if (FRONTEND_BUILD / 'standalone').exists():
         os.makedirs(standalone_public, exist_ok=True)
         with open(os.path.join(standalone_public, 'backend_config.json'), 'w', encoding='utf-8') as f:
             json.dump({"api_port": port}, f)
 
 
 def prepare_standalone_assets():
-    standalone_dir = os.path.join(BASE_DIR, '.next', 'standalone')
-    static_source = os.path.join(BASE_DIR, '.next', 'static')
-    static_target = os.path.join(standalone_dir, '.next', 'static')
+    standalone_dir = str(FRONTEND_BUILD / 'standalone')
+    static_source = str(FRONTEND_BUILD / 'static')
+    static_target = os.path.join(standalone_dir, FRONTEND_BUILD.name, 'static')
     public_source = os.path.join(BASE_DIR, 'public')
     public_target = os.path.join(standalone_dir, 'public')
 
@@ -111,6 +113,11 @@ def run_api(port):
 def on_closed(exit_code=0):
     # 仅停止本次启动的服务，避免端口被重用后误杀其他应用。
     music_stop.set()
+    if api_server:
+        api_server.should_exit = True
+    if os.name == 'nt':
+        # 不等待网关网络请求和线程超时；退出即释放 Job，系统结束整个实例。
+        os._exit(exit_code)
     stop_gateway(music_process)
     if api_server:
         api_server.should_exit = True
@@ -137,6 +144,9 @@ if __name__ == "__main__":
     if not claim_instance(EXE_DIR):
         print("[启动] 控制台已在运行，已唤回现有窗口")
         sys.exit(0)
+    # Windows Job 随桌面进程退出自动结束所有子孙进程，异常退出也不会残留 Node。
+    contain_process_tree()
+    configure_daily_task(False)
     try:
         music_process = start_gateway(CONFIG_ROOT / 'music-gateway.json')
         threading.Thread(target=auto_daily_loop, args=(music_stop,), daemon=True).start()
@@ -150,7 +160,7 @@ if __name__ == "__main__":
     env_vars = os.environ.copy()
     env_vars["PORT"] = str(frontend_port)
 
-    standalone_dir = os.path.join(BASE_DIR, '.next', 'standalone')
+    standalone_dir = str(FRONTEND_BUILD / 'standalone')
     server_js = os.path.join(standalone_dir, 'server.js')
 
     # 🌟 核心自适应逻辑：判断是“打包运行”还是“开发运行”

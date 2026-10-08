@@ -29,8 +29,8 @@ type Track = TrackReference & { name: string; artist: string; album: string; cov
 type TrackResult = { track?: Track; error?: string; checking?: boolean };
 
 const playbackReasons: Record<string, string> = {
-  payment_required: '该版本需要会员或购买权益，可登录后本机试听，或选择其他版本发布',
-  login_required: '该版本需要登录，可使用本机账号试听，公开歌单请选其他版本',
+  payment_required: '该版本需要会员或购买权益，可使用本机或服务端账号音源',
+  login_required: '该版本需要有效账号，可使用本机或服务端账号音源',
   trial_only: '该版本只有试听片段，不能作为完整音源发布',
   copyright_or_region: '平台未提供完整音源，可能受版权或地区限制',
 };
@@ -296,7 +296,7 @@ export default function MusicManager() {
   return <div className="console-grid">
     <MusicAccounts preview={preview} onClosePreview={() => setPreview(null)} />
     <section className="console-panel music-playlist-panel span-8">
-      <header><div><h2><ListMusic size={19} />双源播放列表</h2><span>网易云与酷狗共用一个播放器；最多 12 首</span></div><div className="music-validation-actions"><span className={`integration-badge ${unavailableCount === 0 && checkingCount === 0 ? 'is-ready' : ''}`}><span className={`status-dot ${unavailableCount ? 'warn' : ''}`} />{checkingCount ? `${checkingCount} 首检查中` : unavailableCount ? `${unavailableCount} 首不可播放` : `${references.length} 首可播放`}</span><button className="console-action secondary" type="button" onClick={() => void refreshTracks(references, 'refresh')} disabled={Boolean(busy) || Boolean(validatingTrack) || !references.length}>{busy === 'refresh' ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}检查全部</button></div></header>
+      <header><div><h2><ListMusic size={19} />双源播放列表</h2><span>网易云与酷狗共用一个播放器；最多 12 首</span></div><div className="music-validation-actions"><span className={`integration-badge ${unavailableCount === 0 && checkingCount === 0 ? 'is-ready' : ''}`}><span className={`status-dot ${unavailableCount ? 'warn' : ''}`} />{checkingCount ? `${checkingCount} 首检查中` : unavailableCount ? `${unavailableCount} 首需账号音源` : `${references.length} 首可播放`}</span><button className="console-action secondary" type="button" onClick={() => void refreshTracks(references, 'refresh')} disabled={Boolean(busy) || Boolean(validatingTrack) || !references.length}>{busy === 'refresh' ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}检查全部</button></div></header>
       <div className="music-resource-list">
         {references.length ? references.map((reference, index) => {
           const key = referenceKey(reference);
@@ -310,7 +310,7 @@ export default function MusicManager() {
             <article className={unavailable ? 'is-unavailable' : undefined}>
               <span className="music-resource-index">{String(index + 1).padStart(2, '0')}</span>
               <MusicCover src={track?.cover || reference.cover} />
-              <div className="music-resource-copy"><strong>{track?.name || reference.name || (result?.error ? '资源暂不可用' : '正在读取歌曲')}</strong><span>{track ? `${track.artist}${track.album ? ` · ${track.album}` : ''}` : result?.error || key}</span><small><b data-source={reference.source}><MusicSourceIcon source={reference.source} size={12} />{reference.source === 'kugou' ? '酷狗' : '网易云'}</b> · {unavailable ? '公开音源受限' : !result || result.checking ? '正在检查音源' : preciseLyric ? '音频可用 / KRC 逐字歌词' : '音频可用 / 普通歌词回退'} · {formatOffset(lyric.offsetMs)}</small>{unavailable && <em><CircleAlert size={13} />{playbackReasons[track?.playbackReason || ''] || '当前版本没有公开完整音源，可使用本机账号试听'}</em>}</div>
+              <div className="music-resource-copy"><strong>{track?.name || reference.name || (result?.error ? '资源暂不可用' : '正在读取歌曲')}</strong><span>{track ? `${track.artist}${track.album ? ` · ${track.album}` : ''}` : result?.error || key}</span><small><b data-source={reference.source}><MusicSourceIcon source={reference.source} size={12} />{reference.source === 'kugou' ? '酷狗' : '网易云'}</b> · {unavailable ? '未登录音源受限' : !result || result.checking ? '正在检查音源' : preciseLyric ? '音频可用 / KRC 逐字歌词' : '音频可用 / 普通歌词回退'} · {formatOffset(lyric.offsetMs)}</small>{unavailable && <em><CircleAlert size={13} />{playbackReasons[track?.playbackReason || ''] || '当前版本没有公开完整音源，可使用本机账号试听'}</em>}</div>
               <div className="music-resource-actions"><button type="button" onClick={() => setPreview({ ...reference })} title="本机账号试听" aria-label={`本机试听 ${track?.name || reference.name || key}`}><Music2 size={15} /></button><button type="button" onClick={() => setExpandedTrack(expanded ? null : key)} title="歌词状态与校准" aria-label={`${track?.name || reference.name || key} 歌词设置`} aria-expanded={expanded}><Waves size={15} />{expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button><button type="button" onClick={() => move(index, -1)} disabled={index === 0} title="上移" aria-label={`上移 ${track?.name || key}`}><ArrowUp size={15} /></button><button type="button" onClick={() => move(index, 1)} disabled={index === references.length - 1} title="下移" aria-label={`下移 ${track?.name || key}`}><ArrowDown size={15} /></button><button type="button" onClick={() => remove(key)} title="移除" aria-label={`移除 ${track?.name || key}`}><Trash2 size={15} /></button></div>
             </article>
             {expanded && <div className="music-lyric-settings music-auto-lyric-settings">

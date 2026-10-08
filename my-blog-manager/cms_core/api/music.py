@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, Path, Query
 from fastapi.responses import JSONResponse
 
-from cms_core import kugou
+from cms_core import kugou, music_accounts
 from cms_core.music_validation import validate_track
 
 router = APIRouter()
@@ -101,6 +101,8 @@ def query_playback_status(
     name: Annotated[str, Query(max_length=200)] = "",
     artist: Annotated[str, Query(max_length=200)] = "",
     duration_ms: Annotated[int, Query(alias="durationMs", ge=0, le=3_600_000)] = 0,
+    album_id: Annotated[str, Query(alias="albumId", pattern=r"^\d{0,40}$")] = "",
+    album_audio_id: Annotated[str, Query(alias="albumAudioId", pattern=r"^\d{0,40}$")] = "",
     refresh: Annotated[bool, Query()] = False,
 ):
     try:
@@ -112,6 +114,14 @@ def query_playback_status(
             duration_ms=duration_ms,
             force=refresh,
         )
+        # 匿名缓存不能代表账号权益；账号检查结果不缓存，也不返回临时播放地址。
+        result = {**result, "playbackScope": "public"}
+        if not result.get("available") and result.get("reason") not in ("invalid_hash", "invalid_id"):
+            try:
+                music_accounts.private_playback(source, track_id, album_id=album_id, album_audio_id=album_audio_id)
+                result.update(available=True, playbackSource=source, playbackScope="account", reason="")
+            except ValueError:
+                pass
         return ok(result)
     except (httpx.HTTPError, ValueError, TypeError):
         return fail("music_validation_unavailable", "音源检查服务暂时不可用，请稍后重试。", 502)

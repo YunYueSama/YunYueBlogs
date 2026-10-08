@@ -107,7 +107,7 @@ export default function MusicAccounts({ preview, onClosePreview }: { preview?: {
 
   useEffect(() => {
     if (!preview || !audio || audioTrack !== `${preview.source}:${preview.id}`) return;
-    void audioRef.current?.play().catch(() => setPreviewState({ loading: false, message: '音源已就绪，请点击播放器的播放按钮开始试听。' }));
+    void audioRef.current?.play().catch(() => setPreviewState({ loading: false, message: '音源已就绪，请点击播放器的播放按钮开始播放。' }));
   }, [audio, audioTrack, preview]);
 
   return <section className="console-panel span-12 music-accounts">
@@ -137,7 +137,7 @@ export default function MusicAccounts({ preview, onClosePreview }: { preview?: {
       <small>只向对应音乐平台发送手机号和验证码，凭据加密保存在本机。若平台要求安全验证，请在官方手机端完成。</small>
     </form>}
     {message && <p className="console-note" role="status">{message}</p>}
-    {preview && <div className="music-private-preview" role="region" aria-label="本机账号试听"><div className="music-preview-heading"><MusicSourceIcon source={preview.source} size={24} /><strong>本机试听 · {preview.name || previewName || preview.id}</strong><button className="console-icon" type="button" aria-label="关闭试听" onClick={onClosePreview}><X size={18} /></button></div><p role="status">{previewState.loading ? <LoaderCircle size={16} className="animate-spin" /> : null}{previewState.message}</p>{audio && audioTrack === `${preview.source}:${preview.id}` && <audio ref={audioRef} controls src={audio} preload="metadata" onError={() => { setAudio(''); setPreviewState({ loading: false, message: '音源已失效或连接失败，请再次点击歌曲旁的音符按钮重试。' }); }} />}</div>}
+    {preview && <div className="music-private-preview" role="region" aria-label="本机账号播放"><div className="music-preview-heading"><MusicSourceIcon source={preview.source} size={24} /><strong>本机播放 · {preview.name || previewName || preview.id}</strong><button className="console-icon" type="button" aria-label="关闭播放" onClick={onClosePreview}><X size={18} /></button></div><p role="status">{previewState.loading ? <LoaderCircle size={16} className="animate-spin" /> : null}{previewState.message}</p>{audio && audioTrack === `${preview.source}:${preview.id}` && <audio ref={audioRef} controls src={audio} preload="metadata" onError={() => { setAudio(''); setPreviewState({ loading: false, message: '音源已失效或连接失败，请再次点击歌曲旁的音符按钮重试。' }); }} />}</div>}
     <p className="console-note">本机账号用于试听；公开博客可单独配置 Vercel 服务端账号。会员歌曲能否完整播放取决于该账号的有效权益。退出本机账号不会删除 Vercel 中的凭据。每日福利遵守平台领取资格，必要时请在官方 App 完成操作。</p>
   </section>;
 }

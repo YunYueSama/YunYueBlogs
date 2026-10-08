@@ -296,7 +296,7 @@ def private_playback(source: str, track_id: str, *, album_id: str = '', album_au
         url = urls[0] if isinstance(urls, list) and urls else urls
     if not isinstance(url, str) or not url.startswith(('https://', 'http://')):
         raise ValueError('平台未提供完整音源，请检查账号会员、购买权益或地区限制')
-    return {'url': url, 'scope': 'private', 'message': '仅供本机账号试听，不会保存到公开歌单'}
+    return {'url': url, 'scope': 'private', 'message': '账号完整音源已获取；临时播放地址不会写入歌单'}
 
 
 def today_record(body: dict, today: str) -> dict | None:

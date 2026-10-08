@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import OperationQueue from './OperationQueue';
+import QuickNavigation from './QuickNavigation';
 
 const navigation = [
   { href: '/admin', label: '概览', icon: Gauge, aliases: ['/admin'] },
@@ -34,7 +35,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       </aside>
 
       <div className="console-main">
-        <header className="console-topbar"><button className="console-icon mobile-only" type="button" onClick={() => setOpen(true)} aria-label="打开导航"><Menu size={20} /></button><div><span>控制台 /</span><strong>{active.label}</strong></div><OperationQueue /><Link className="console-action secondary" href="/editor"><FileText size={16} />新建内容</Link><Link className="console-action console-publish-action" href="/publish"><CloudUpload size={16} />发布</Link></header>
+        <header className="console-topbar"><button className="console-icon mobile-only" type="button" onClick={() => setOpen(true)} aria-label="打开导航"><Menu size={20} /></button><div><span>控制台 /</span><strong>{active.label}</strong></div><QuickNavigation /><OperationQueue /><Link className="console-action secondary" href="/editor"><FileText size={16} />新建内容</Link><Link className="console-action console-publish-action" href="/publish"><CloudUpload size={16} />发布</Link></header>
         <main className="console-content">{children}</main>
       </div>
       {open && <button className="console-scrim mobile-only" type="button" aria-label="关闭导航" onClick={() => setOpen(false)} />}

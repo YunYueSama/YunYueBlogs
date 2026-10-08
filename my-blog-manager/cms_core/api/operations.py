@@ -251,7 +251,8 @@ def list_operations():
 @router.put("")
 def save_operations(payload: OperationList):
     data = payload.model_dump()
-    write_json_atomic(OPERATIONS_FILE, data)
+    with OPERATION_LOCK:
+        write_json_atomic(OPERATIONS_FILE, data)
     return ok(data)
 
 

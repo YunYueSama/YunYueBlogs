@@ -16,26 +16,14 @@ import time
 import socket
 import json
 import subprocess
-import shutil
 import traceback
+from desktop_runtime import claim_instance, sync_assets
 from cms_core.main import app
 
 frontend_process = None
+api_server = None
+api_thread = None
 WINDOW_CONFIG_FILE = os.path.join(EXE_DIR, 'window_config.json')
-
-def release_port(port):
-    try:
-        command = f'netstat -ano | findstr :{port}'
-        result = subprocess.check_output(command, shell=True).decode()
-        lines = result.strip().split('\n')
-        for line in lines:
-            parts = line.strip().split()
-            if len(parts) >= 5 and parts[3] == 'LISTENING':
-                pid = parts[-1]
-                subprocess.run(f'taskkill /PID {pid} /F /T', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(0.5)
-    except:
-        pass
 
 def load_window_size():
     try:
@@ -79,14 +67,14 @@ def prepare_standalone_assets():
     public_source = os.path.join(BASE_DIR, 'public')
     public_target = os.path.join(standalone_dir, 'public')
 
-    if os.path.isdir(static_source):
-        shutil.copytree(static_source, static_target, dirs_exist_ok=True)
-    if os.path.isdir(public_source):
-        shutil.copytree(public_source, public_target, dirs_exist_ok=True)
+    copied = sync_assets(static_source, static_target) + sync_assets(public_source, public_target)
+    print(f"[启动] 更新 {copied} 个静态资源")
 
 def wait_for_port(port, timeout=60):
     start_time = time.time()
     while time.time() - start_time < timeout:
+        if frontend_process is not None and frontend_process.poll() is not None:
+            return False
         try:
             with socket.create_connection(('127.0.0.1', port), timeout=1):
                 return True
@@ -104,29 +92,48 @@ class WindowAPI:
     def close_window(self): on_closed()
 
 def run_api(port):
+    global api_server
     # 🌟 强制后端在 EXE 所在的真实目录工作，确保能读取到旁边的 data/ 等数据
     os.chdir(EXE_DIR)
     print(f"🟢 [后端] 工作路径已锁定: {EXE_DIR}")
     try:
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+        api_server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info"))
+        api_server.run()
     except Exception as e:
         print("❌ [后端] 崩溃报错：")
         traceback.print_exc()
 
-def on_closed():
-    if frontend_process:
-        subprocess.run(f"taskkill /F /T /PID {frontend_process.pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    release_port(frontend_port)
-    release_port(backend_port)
-    os._exit(0)
+def on_closed(exit_code=0):
+    # 仅停止本次启动的服务，避免端口被重用后误杀其他应用。
+    if api_server:
+        api_server.should_exit = True
+    if api_thread and api_thread.is_alive():
+        api_thread.join(timeout=5)
+    if frontend_process and frontend_process.poll() is None:
+        if os.name == 'nt':
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(frontend_process.pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            frontend_process.terminate()
+        try:
+            frontend_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            frontend_process.kill()
+    os._exit(exit_code)
 
 def on_shown():
     win_size = load_window_size()
     webview.windows[0].resize(int(win_size["width"]), int(win_size["height"]))
 
 if __name__ == "__main__":
+    if not claim_instance(EXE_DIR):
+        print("[启动] 控制台已在运行，已唤回现有窗口")
+        sys.exit(0)
     frontend_port = get_free_port()
     backend_port = get_free_port()
+    while backend_port == frontend_port:
+        backend_port = get_free_port()
 
     env_vars = os.environ.copy()
     env_vars["PORT"] = str(frontend_port)
@@ -150,14 +157,12 @@ if __name__ == "__main__":
         window_url = f"http://localhost:{frontend_port}"
 
     write_port_config(backend_port)
-    threading.Thread(target=run_api, args=(backend_port,), daemon=True).start()
+    api_thread = threading.Thread(target=run_api, args=(backend_port,), daemon=True)
+    api_thread.start()
 
     if not wait_for_port(backend_port) or not wait_for_port(frontend_port):
         print(">>> ❌ 前后端启动失败！")
-        on_closed()
-        sys.exit(1)
-
-    time.sleep(1.5)
+        on_closed(1)
 
     api = WindowAPI()
     window = webview.create_window(

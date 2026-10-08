@@ -15,7 +15,7 @@ const labels = {
 export default function OperationQueue() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { operations, removeOperation, clearOperations, applyOperations, hydrated } = useOperations();
+  const { operations, removeOperation, clearOperations, applyOperations, hydrated, saving, error, retrySave } = useOperations();
   const [open, setOpen] = useState(false);
   const [applying, setApplying] = useState(false);
 
@@ -54,9 +54,10 @@ export default function OperationQueue() {
     </button>
     {open && createPortal(<div className="queue-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <aside className="queue-drawer" role="dialog" aria-modal="true" aria-labelledby="queue-title">
-        <header><div><span>LOCAL OPERATION QUEUE</span><h2 id="queue-title">待应用操作</h2></div><button className="console-icon" type="button" onClick={() => setOpen(false)} aria-label="关闭操作队列"><X size={18} /></button></header>
-        <div className="queue-list">{!hydrated ? <div className="queue-empty"><LoaderCircle className="animate-spin" /><span>正在读取本地队列</span></div> : operations.length ? operations.map((operation) => <article key={operation.id}><span>{labels[operation.type]}</span><div><strong>{operation.label}</strong><small>{operation.description || new Date(operation.timestamp).toLocaleString()}</small></div><button type="button" onClick={() => removeOperation(operation.id)} aria-label={`移除${operation.label}`} title="移除"><Trash2 size={15} /></button></article>) : <div className="queue-empty"><CheckCircle2 size={26} /><strong>队列是空的</strong><span>编辑内容或资料后，待应用操作会出现在这里。</span></div>}</div>
-        <footer><button className="console-action secondary" type="button" onClick={clearOperations} disabled={!operations.length || applying}><Trash2 size={16} />清空</button><button className="console-action" type="button" onClick={() => void apply()} disabled={!operations.length || applying}>{applying ? <LoaderCircle className="animate-spin" size={16} /> : <Play size={16} />}应用到工作区</button></footer>
+        <header><div><span>{saving ? '正在保存' : '本地操作队列'}</span><h2 id="queue-title">待应用操作</h2></div><button className="console-icon" type="button" onClick={() => setOpen(false)} aria-label="关闭操作队列"><X size={18} /></button></header>
+        {error && <div className="form-status error" role="alert">{error}<button className="console-action secondary" type="button" onClick={() => void retrySave().catch(() => undefined)} disabled={saving || applying}>重试连接与保存</button></div>}
+        <div className="queue-list">{!hydrated ? <div className="queue-empty"><LoaderCircle className="animate-spin" /><span>正在读取本地队列</span></div> : operations.length ? operations.map((operation) => <article key={operation.id}><span>{labels[operation.type]}</span><div><strong>{operation.label}</strong><small>{operation.description || new Date(operation.timestamp).toLocaleString()}</small></div><button type="button" onClick={() => removeOperation(operation.id)} disabled={applying} aria-label={`移除${operation.label}`} title="移除"><Trash2 size={15} /></button></article>) : <div className="queue-empty"><CheckCircle2 size={26} /><strong>队列是空的</strong><span>编辑内容或资料后，待应用操作会出现在这里。</span></div>}</div>
+        <footer><button className="console-action secondary" type="button" onClick={clearOperations} disabled={!hydrated || !operations.length || applying}><Trash2 size={16} />清空</button><button className="console-action" type="button" onClick={() => void apply()} disabled={!hydrated || !operations.length || applying}>{applying ? <LoaderCircle className="animate-spin" size={16} /> : <Play size={16} />}应用到工作区</button></footer>
       </aside>
     </div>, document.body)}
   </>;

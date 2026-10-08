@@ -77,8 +77,8 @@ export default function IntegrationForm() {
     setTestingPicBed(true);
     setStatus(null);
     try {
-      const result = await managerApi<{ name: string }>('/api/picbed/test', { method: 'POST', body: '{}' });
-      setStatus({ message: `${result.name} 连接正常，可以安全上传图片。` });
+      const result = await managerApi<{ name: string; message: string }>('/api/picbed/test', { method: 'POST', body: '{}' });
+      setStatus({ message: `${result.name}：${result.message}` });
     } catch (error) {
       setStatus({ error: true, message: error instanceof Error ? error.message : '图床连接测试失败' });
     } finally {

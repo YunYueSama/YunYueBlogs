@@ -117,3 +117,25 @@ def test_upload_url_preserves_channel_and_requests_original_name() -> None:
     assert picbed.upload_url("https://images.example.invalid/upload?uploadChannel=telegram&uploadNameType=default") == (
         "https://images.example.invalid/upload?uploadChannel=telegram&uploadNameType=origin"
     )
+
+
+def test_empty_upload_probe_404_does_not_claim_endpoint_missing(tmp_path: Path, monkeypatch) -> None:
+    configure(tmp_path, monkeypatch)
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, *args, **kwargs):
+            return httpx.Response(404, text='Not Found')
+
+    monkeypatch.setattr(httpx, 'AsyncClient', FakeClient)
+    response = asyncio.run(picbed.test_picbed_connection())
+    assert response_json(response)['error']['code'] == 'picbed_probe_inconclusive'
+    assert '上传一张图片验证' in response_json(response)['error']['message']

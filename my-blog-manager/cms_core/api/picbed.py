@@ -209,10 +209,12 @@ async def test_picbed_connection():
         if response.status_code in {401, 403}:
             return fail("picbed_unauthorized", "图床 Token 无效或已过期。", 401)
         if response.status_code == 404:
-            return fail("picbed_endpoint_missing", "图床上传接口不存在，请检查 API 地址。", 404)
+            return fail("picbed_probe_inconclusive", "图床未接受空文件测试请求。请先在媒体库上传一张图片验证；若上传也失败，再检查接口地址。", 400)
         if response.status_code >= 500:
             return fail("picbed_unavailable", "图床服务暂时不可用。", 502)
-        return ok({"name": name or "自定义图床", "status": "ready"})
+        if response.status_code not in {200, 201, 204, 400, 422}:
+            return fail("picbed_probe_inconclusive", f"图床测试返回 HTTP {response.status_code}，请通过实际上传确认配置。", 400)
+        return ok({"name": name or "自定义图床", "status": "reachable", "message": "图床已响应连接测试，请上传图片确认上传权限及存储渠道。"})
     except (httpx.ConnectError, httpx.TimeoutException):
         return fail("picbed_unreachable", "无法连接图床服务，请检查网络和 API 地址。", 504)
     except ValueError as reason:

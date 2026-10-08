@@ -40,7 +40,7 @@ export default function MediaCenter() {
   const onDrop = (event: DragEvent) => { event.preventDefault(); setDragging(false); void handleFile(event.dataTransfer.files?.[0]); };
   const testConnection = async () => {
     setBusy('test'); setStatus(null);
-    try { const result = await managerApi<{ name: string }>('/api/picbed/test', { method: 'POST', body: '{}' }); setStatus({ message: `${result.name}连接正常，可以上传图片。` }); }
+    try { const result = await managerApi<{ name: string; message: string }>('/api/picbed/test', { method: 'POST', body: '{}' }); setStatus({ message: `${result.name}：${result.message}` }); }
     catch (error) { setStatus({ error: true, message: error instanceof Error ? error.message : '连接测试失败' }); }
     finally { setBusy(null); }
   };

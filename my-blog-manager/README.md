@@ -66,8 +66,29 @@ npm run dev
 ```powershell
 npm run lint
 npm run typecheck
+npm run test:client
 python -m pytest -q
 npm run build
 ```
+
+若桌面窗口仍在运行，可使用独立目录验收构建，避免 Windows 文件占用：
+
+```powershell
+$env:YUNYUE_BUILD_DIR = '.next-review'
+npm run build
+Remove-Item Env:YUNYUE_BUILD_DIR
+```
+
+独立构建用于验收，不会替换当前桌面进程。关闭旧窗口后，双击 `Start.bat` 会按源码变化重新生成正式构建。
+
+## 工作台操作
+
+- 内容库支持按标题、摘要、标签搜索及文章/杂谈筛选，每页最多渲染 20 篇内容。
+- 顶栏“快速前往”或 `Ctrl/⌘ + K` 可查找功能，Enter 打开首项，Esc 关闭。
+- 操作队列会顺序保存；点击“应用到工作区”时先等待最新快照保存完成。连接或保存失败时保留当前内容，并在队列中提供重试。
+- 接口请求默认最多等待 60 秒，不自动重试写入；提交超时后应先确认当前状态，避免重复操作。
+- 图床空请求测试只确认接口响应，真实上传仍需图片验证；空请求返回 404 时不再断言上传接口不存在。
+- 桌面启动按文件大小和修改时间增量同步资源；退出只清理本次启动的进程，不再按端口终止其他应用。
+- 同一目录只运行一个桌面实例，重复启动会唤回已有窗口。首次升级前需先关闭没有实例保护的旧窗口。
 
 同步接口拒绝脏仓库、路径穿越和清单外改动，不执行 `reset`、`clean`、自动合并或强制推送。仓库更新只接受 fast-forward；提交信息必须包含中文，`workspace/config/secrets.json` 不得提交或复制到公开博客仓库。GitHub 推送成功后由 Vercel 仓库集成自动触发构建，控制台保存的 Vercel 项目地址仅用于查看最终部署状态。

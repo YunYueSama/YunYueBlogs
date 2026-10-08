@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:api": "python -m pytest -q"
+    "test:api": "python -m pytest -q",
+    "test:client": "node --test tests/manager_api.test.cjs"
   },
   "dependencies": {
     "@tiptap/extension-code-block-lowlight": "^3.23.4",

@@ -222,6 +222,9 @@ def apply_sync_plan(payload: ApplyRequest):
                 try:
                     for relative in files:
                         destination = managed_destination(target, relative)
+                        # 未变化文件保留 Git 的检出格式，避免只因换行与时间戳显示脏工作区。
+                        if destination.is_file() and file_digest(files[relative]) == file_digest(destination):
+                            continue
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         os.replace(staged_root / Path(relative), destination)
                     for relative in stale_files:

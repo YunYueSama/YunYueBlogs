@@ -158,4 +158,3 @@ def require_revision(expected):
     current = refresh(force=True)
     if current.get('enabled') and expected != current.get('revision'):
         raise RuntimeError('服务器内容已被其他设备更新，请刷新页面查看最新版本后再保存或发布。')
-

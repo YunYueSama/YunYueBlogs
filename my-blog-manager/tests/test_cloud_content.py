@@ -100,4 +100,3 @@ def test_preview_ignores_windows_checkout_line_endings(tmp_path):
     assert sync.file_digest(server) == sync.file_digest(checkout)
     checkout.write_bytes(checkout.read_bytes() + '新内容'.encode('utf-8'))
     assert sync.file_digest(server) != sync.file_digest(checkout)
-

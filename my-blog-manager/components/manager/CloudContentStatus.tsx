@@ -19,4 +19,3 @@ export default function CloudContentStatus() {
     {error && <p role="alert" className="form-status error">{error}</p>}
   </section>;
 }
-

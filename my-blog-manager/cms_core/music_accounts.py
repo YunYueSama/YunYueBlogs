@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import secrets
+import hashlib
+import re
 import os
 import json
 from contextlib import contextmanager
@@ -17,6 +19,8 @@ from cms_core.workspace import CONFIG_ROOT, ensure_workspace, read_json, write_j
 
 LOCK = threading.RLock()
 PENDING: dict[str, dict[str, Any]] = {}
+SMS_PENDING: dict[str, dict[str, Any]] = {}
+SMS_SENT: dict[str, float] = {}
 CHINA = timezone(timedelta(hours=8))
 
 
@@ -152,11 +156,15 @@ def poll_login(source: str, login_id: str) -> dict:
     result = gateway(source, 'login_qr_check', {'key': pending['key'], 'noCookie': True}, pending['cookie'])
     body = result['body']
     data = body.get('data', {})
-    code = body.get('code') if source == 'netease' else data.get('status')
+    try:
+        code = int(body.get('code') if source == 'netease' else data.get('status'))
+    except (TypeError, ValueError):
+        raise ValueError('平台未返回有效扫码状态，请在手机端确认，或切换手机号登录') from None
     success = code == (803 if source == 'netease' else 4)
     if not success:
         expired = code in ({800} if source == 'netease' else {0})
         confirmed = code == (802 if source == 'netease' else 2)
+        pending['cookie'] = merge_cookies(pending['cookie'], result.get('cookies', []))
         return {'status': 'expired' if expired else 'confirming' if confirmed else 'waiting',
                 'message': '二维码已过期' if expired else '请在手机端确认登录' if confirmed else '等待手机扫码'}
     cookies = merge_cookies(pending['cookie'], result.get('cookies', []))
@@ -164,7 +172,7 @@ def poll_login(source: str, login_id: str) -> dict:
         cookies = merge_cookies(cookies, body['cookie'].split(';'))
     if source == 'kugou':
         cookies.update({key: str(data[key]) for key in ('token', 'userid') if data.get(key)})
-    if not cookies.get('MUSIC_U' if source == 'netease' else 'token'):
+    if not cookies.get('MUSIC_U' if source == 'netease' else 'token') or cookies.get('token') == 'undefined':
         raise ValueError('平台已确认扫码，但未返回有效登录凭据，请重新登录')
     nickname = str(data.get('nickname') or '已登录账号')[:100]
     with account_lock():
@@ -181,6 +189,76 @@ def poll_login(source: str, login_id: str) -> dict:
     return {'status': 'logged_in', 'message': '登录成功，凭据仅保存在本机'}
 
 
+def send_sms(source: str, phone: str) -> dict:
+    if not re.fullmatch(r'1[3-9]\d{9}', phone):
+        raise ValueError('请输入有效的中国大陆手机号')
+    identity = hashlib.sha256(f'{source}:{phone}'.encode()).hexdigest()
+    now = time.monotonic()
+    with LOCK:
+        if now - SMS_SENT.get(identity, -1000) < 60:
+            raise ValueError('验证码请求已提交，请等待 60 秒后再试')
+        for key in list(SMS_PENDING):
+            if SMS_PENDING[key]['expires'] < now:
+                del SMS_PENDING[key]
+        for key in list(SMS_SENT):
+            if now - SMS_SENT[key] > 600:
+                del SMS_SENT[key]
+        if len(SMS_PENDING) >= 8 or len(SMS_SENT) >= 20:
+            raise ValueError('登录请求过多，请稍后重试')
+        SMS_SENT[identity] = now
+    result = gateway(source, 'captcha_sent', {'phone': phone, 'ctcode': '86'} if source == 'netease' else {'mobile': phone})
+    body = result['body']
+    if body.get('code' if source == 'netease' else 'status') != (200 if source == 'netease' else 1):
+        raise ValueError('平台未确认发送验证码，请检查手机号；如需安全验证，请先在官方手机端完成后重试')
+    login_id = secrets.token_urlsafe(24)
+    with LOCK:
+        SMS_PENDING[login_id] = {'source': source, 'phone': phone, 'cookie': merge_cookies({}, result.get('cookies', [])), 'expires': now + 600, 'attempts': 0}
+    return {'loginId': login_id, 'retryAfter': 60, 'message': '验证码已发送，请查看手机短信'}
+
+
+def login_sms(source: str, login_id: str, code: str) -> dict:
+    if not re.fullmatch(r'\d{4,8}', code):
+        raise ValueError('请输入 4 至 8 位短信验证码')
+    with LOCK:
+        pending = SMS_PENDING.get(login_id)
+        if not pending or pending['source'] != source or pending['expires'] < time.monotonic() or pending['attempts'] >= 5:
+            raise ValueError('验证码登录已过期或尝试过多，请重新获取验证码')
+        pending['attempts'] += 1
+    params = {'phone': pending['phone'], 'captcha': code, 'countrycode': '86'} if source == 'netease' else {'mobile': pending['phone'], 'code': code}
+    result = gateway(source, 'login_cellphone', params, pending['cookie'])
+    body = result['body']
+    if body.get('code' if source == 'netease' else 'status') != (200 if source == 'netease' else 1):
+        raise ValueError('验证码错误、已过期或平台要求安全验证，请重新确认；必要时在官方手机端完成验证')
+    data = body.get('profile', {}) if source == 'netease' else body.get('data', {})
+    cookies = merge_cookies(pending['cookie'], result.get('cookies', []))
+    if source == 'netease' and isinstance(body.get('cookie'), str):
+        cookies = merge_cookies(cookies, body['cookie'].split(';'))
+    if source == 'kugou':
+        cookies.update({key: str(data[key]) for key in ('token', 'userid') if data.get(key)})
+    if not cookies.get('MUSIC_U' if source == 'netease' else 'token') or cookies.get('token') == 'undefined':
+        raise ValueError('平台未返回有效登录凭据，请重新登录')
+    with account_lock():
+        if SMS_PENDING.get(login_id) is not pending:
+            raise ValueError('登录已取消，请重新获取验证码')
+        value = state()
+        value[source] = {'cookie': cookies, 'nickname': str(data.get('nickname') or data.get('username') or '已登录账号')[:100], 'autoDailyVip': source == 'kugou', 'daily': {}}
+        save(value)
+        SMS_PENDING.pop(login_id, None)
+        if source == 'kugou':
+            from music_runtime import configure_daily_task
+            value[source]['scheduler'] = configure_daily_task(True)
+            save(value)
+    return {'status': 'logged_in', 'message': '登录成功，凭据仅保存在本机'}
+
+
+def cancel_login(source: str, login_id: str) -> dict:
+    with LOCK:
+        for collection in (PENDING, SMS_PENDING):
+            if collection.get(login_id, {}).get('source') == source:
+                collection.pop(login_id, None)
+    return {'message': '已取消登录'}
+
+
 def logout(source: str) -> None:
     with account_lock():
         if source == 'kugou':
@@ -189,9 +267,10 @@ def logout(source: str) -> None:
         value = state()
         value.pop(source, None)
         save(value)
-        for key in list(PENDING):
-            if PENDING[key]['source'] == source:
-                del PENDING[key]
+        for collection in (PENDING, SMS_PENDING):
+            for key in list(collection):
+                if collection[key]['source'] == source:
+                    del collection[key]
 
 
 def private_playback(source: str, track_id: str) -> dict:

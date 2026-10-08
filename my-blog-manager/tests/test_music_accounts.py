@@ -14,9 +14,13 @@ def local_account(tmp_path, monkeypatch):
     monkeypatch.setattr(accounts, 'CONFIG_ROOT', tmp_path)
     monkeypatch.setattr(accounts, 'ensure_workspace', lambda: None)
     accounts.PENDING.clear()
+    accounts.SMS_PENDING.clear()
+    accounts.SMS_SENT.clear()
     accounts.save({'kugou': {'cookie': {'token': 'private-test-token', 'userid': '42'}, 'autoDailyVip': True}})
     yield tmp_path
     accounts.PENDING.clear()
+    accounts.SMS_PENDING.clear()
+    accounts.SMS_SENT.clear()
 
 
 def history(received):
@@ -111,3 +115,51 @@ def test_windows_storage_is_protected(local_account):
         assert 'private-test-token' not in raw
         assert 'protectedCookie' in json.loads(raw)['kugou']
         assert accounts.state()['kugou']['cookie']['token'] == 'private-test-token'
+
+
+@pytest.mark.parametrize('source', ['netease', 'kugou'])
+def test_sms_login_is_scoped_private_and_throttled(local_account, monkeypatch, source):
+    monkeypatch.setattr('music_runtime.configure_daily_task', lambda enabled: {'enabled': enabled})
+    calls = []
+    def gateway(provider, action, params=None, cookie=None):
+        calls.append((provider, action, params, cookie))
+        if action == 'captcha_sent':
+            return {'body': {'code': 200, 'status': 1}, 'cookies': ['KUGOU_API_DEV=DEVICE']}
+        if source == 'netease':
+            return {'body': {'code': 200, 'profile': {'nickname': '测试账号'}, 'cookie': 'MUSIC_U=secret-sms; Path=/'}}
+        return {'body': {'status': 1, 'data': {'nickname': '测试账号', 'token': 'secret-sms', 'userid': 42}}}
+    monkeypatch.setattr(accounts, 'gateway', gateway)
+    session = accounts.send_sms(source, '13800000000')
+    assert '13800000000' not in json.dumps(session)
+    with pytest.raises(ValueError, match='60 秒'):
+        accounts.send_sms(source, '13800000000')
+    other = 'kugou' if source == 'netease' else 'netease'
+    with pytest.raises(ValueError, match='过期'):
+        accounts.login_sms(other, session['loginId'], '123456')
+    result = accounts.login_sms(source, session['loginId'], '123456')
+    assert result['status'] == 'logged_in'
+    assert accounts.overview()[source]['loggedIn']
+    assert 'secret-sms' not in json.dumps(accounts.overview())
+    assert '13800000000' not in (local_account / 'music-accounts.json').read_text()
+    assert calls[-1][3]['KUGOU_API_DEV'] == 'DEVICE'
+    with pytest.raises(ValueError, match='过期'):
+        accounts.login_sms(source, session['loginId'], '123456')
+
+
+def test_failed_sms_or_invalid_phone_does_not_create_session(local_account, monkeypatch):
+    monkeypatch.setattr(accounts, 'gateway', lambda *args: {'body': {'status': 0, 'challenge': True}})
+    with pytest.raises(ValueError, match='手机号'):
+        accounts.send_sms('kugou', 'not-a-phone')
+    with pytest.raises(ValueError, match='安全验证'):
+        accounts.send_sms('kugou', '13800000000')
+    assert not accounts.SMS_PENDING
+
+
+def test_cancelled_sms_and_invalid_qr_status_are_not_waiting_forever(local_account, monkeypatch):
+    accounts.SMS_PENDING['session'] = {'source': 'kugou'}
+    accounts.cancel_login('kugou', 'session')
+    assert not accounts.SMS_PENDING
+    accounts.PENDING['session'] = {'source': 'kugou', 'key': 'test', 'cookie': {}, 'expires': accounts.time.monotonic() + 60}
+    monkeypatch.setattr(accounts, 'gateway', lambda *args: {'body': {'status': 0, 'data': {}}})
+    with pytest.raises(ValueError, match='有效扫码状态'):
+        accounts.poll_login('kugou', 'session')

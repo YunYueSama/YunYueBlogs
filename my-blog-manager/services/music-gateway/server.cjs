@@ -12,8 +12,8 @@ const { calculateMid } = require(path.join(kgRoot, 'util/util'));
 const token = process.env.MUSIC_GATEWAY_TOKEN;
 if (!token) throw new Error('缺少本机服务认证配置');
 const routes = {
-  netease: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'login_status', 'song_url_v1']),
-  kugou: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'user_detail', 'user_vip_detail', 'song_url', 'youth_month_vip_record', 'youth_day_vip']),
+  netease: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'captcha_sent', 'login_cellphone', 'login_status', 'song_url_v1']),
+  kugou: new Set(['login_qr_key', 'login_qr_create', 'login_qr_check', 'captcha_sent', 'login_cellphone', 'user_detail', 'user_vip_detail', 'song_url', 'youth_month_vip_record', 'youth_day_vip']),
 };
 const server = http.createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json; charset=utf-8');
@@ -36,14 +36,19 @@ const server = http.createServer(async (request, response) => {
       const cookieText = Object.entries(cookie).map(([key, value]) => `${key}=${value}`).join('; ');
       result = await netease[action]({ ...params, cookie: cookieText, unblock: false });
     } else {
-      const guid = cookie.KUGOU_API_GUID || crypto.randomUUID();
-      const device = { ...cookie, KUGOU_API_GUID: guid, KUGOU_API_MID: calculateMid(guid) };
+      const guid = cookie.KUGOU_API_GUID || crypto.createHash('md5').update(crypto.randomUUID()).digest('hex');
+      const device = { ...cookie, KUGOU_API_GUID: guid, KUGOU_API_MID: calculateMid(guid), KUGOU_API_DEV: cookie.KUGOU_API_DEV || crypto.randomBytes(5).toString('hex').toUpperCase(), KUGOU_API_MAC: cookie.KUGOU_API_MAC || '02:00:00:00:00:00' };
       const handler = require(path.join(kgRoot, 'module', `${action}.js`));
-      result = await handler({ ...params, cookie: device }, (config) => createRequest({ ...config, cookie: { ...device, ...config.cookie } }));
-      result.cookie = [...(result.cookie || []), `KUGOU_API_GUID=${guid}`];
+      result = await handler({ ...params, cookie: device }, (config) => createRequest({ ...config, baseURL: config.baseURL === 'http://login.user.kugou.com' ? 'https://login.user.kugou.com' : config.baseURL, cookie: { ...device, ...config.cookie } }));
+      result.cookie = [...(result.cookie || []), ...Object.entries(device).filter(([key]) => key.startsWith('KUGOU_API_')).map(([key, value]) => `${key}=${value}`)];
     }
     response.end(JSON.stringify({ body: result.body, cookies: result.cookie || [] }));
-  } catch {
+  } catch (error) {
+    // SDK 将平台正常拒绝也作为异常抛出；只透传状态码，不返回账号、原始异常或验证指纹。
+    const body = error?.body;
+    if (body && (Number.isFinite(body.code) || Number.isFinite(body.status)) && typeof body.msg !== 'object') {
+      response.end(JSON.stringify({ body: { code: body.code, status: body.status, error_code: body.error_code, challenge: Boolean(body.ssaCode), data: { status: body.data?.status } }, cookies: [] })); return;
+    }
     // 原始异常可能携带 Cookie、手机号或签名，禁止写入日志和返回前端。
     response.writeHead(502); response.end('{"error":"music_upstream_failed"}');
   }

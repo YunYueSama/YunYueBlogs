@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlsplit
 from fastapi import APIRouter, Path, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from cms_core import music_accounts as accounts
 
 def require_local(request: Request):
@@ -41,6 +41,30 @@ def begin(source: Source):
 @router.get('/{source}/login/{login_id}')
 def poll(source: Source, login_id: Annotated[str, Path(min_length=20, max_length=80)]):
     return invoke(lambda: accounts.poll_login(source, login_id))
+
+
+class SmsPhone(BaseModel):
+    phone: str = Field(pattern=r'^1[3-9]\d{9}$', max_length=11)
+
+
+class SmsLogin(BaseModel):
+    loginId: str = Field(min_length=20, max_length=80)
+    code: str = Field(pattern=r'^\d{4,8}$', max_length=8)
+
+
+@router.post('/{source}/sms/send')
+def send_sms(source: Source, payload: SmsPhone):
+    return invoke(lambda: accounts.send_sms(source, payload.phone))
+
+
+@router.post('/{source}/sms/login')
+def login_sms(source: Source, payload: SmsLogin):
+    return invoke(lambda: accounts.login_sms(source, payload.loginId, payload.code))
+
+
+@router.delete('/{source}/login/{login_id}')
+def cancel(source: Source, login_id: str):
+    return ok(accounts.cancel_login(source, login_id))
 
 
 @router.delete('/{source}')

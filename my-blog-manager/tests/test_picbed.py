@@ -97,6 +97,8 @@ def test_upload_uses_server_secret_and_registers_asset(tmp_path: Path, monkeypat
     assert payload["data"]["url"] == "https://images.example.invalid/file/uploaded.png"
     assert payload["data"]["width"] == 640
     assert captured["headers"] == {"Authorization": "Bearer test-token"}
+    assert captured["url"] == "https://images.example.invalid/upload?uploadNameType=origin"
+    assert captured["files"]["file"][0] == "头像.png"
     assert "test-token" not in json.dumps(payload)
     stored = json.loads((data_root / "media.json").read_text(encoding="utf-8"))
     assert stored[0]["alt"] == "云月头像"
@@ -109,3 +111,9 @@ def test_private_remote_url_is_rejected() -> None:
         except ValueError:
             continue
         raise AssertionError(f"private URL was accepted: {value}")
+
+
+def test_upload_url_preserves_channel_and_requests_original_name() -> None:
+    assert picbed.upload_url("https://images.example.invalid/upload?uploadChannel=telegram&uploadNameType=default") == (
+        "https://images.example.invalid/upload?uploadChannel=telegram&uploadNameType=origin"
+    )

@@ -88,8 +88,13 @@ if __name__ == "__main__":
     if check_node_environment() and check_python_environment() and ensure_frontend_build():
         print("\n🚀 所有环境准备就绪，正在点火启动...")
         # 启动 launcher.py
-        subprocess.Popen([sys.executable, "launcher.py"],
-                         creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
+        # 后台输出保存在本地，桌面运行不再弹出控制台。
+        log_dir = os.path.join("workspace", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "desktop.log"), "a", encoding="utf-8") as log_file:
+            subprocess.Popen([sys.executable, "-u", "launcher.py"],
+                             stdout=log_file, stderr=subprocess.STDOUT,
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     else:
         print("\n⚠️ 环境检查未通过，请根据报错信息手动处理。")
         sys.exit(1)

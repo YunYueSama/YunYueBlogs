@@ -140,11 +140,13 @@ if __name__ == "__main__":
         prepare_standalone_assets()
         env_vars["HOSTNAME"] = "127.0.0.1"
         env_vars["YUNYUE_MANAGER_ROOT"] = EXE_DIR
-        frontend_process = subprocess.Popen(["node", "server.js"], cwd=standalone_dir, env=env_vars, shell=True)
+        frontend_process = subprocess.Popen(["node", "server.js"], cwd=standalone_dir, env=env_vars,
+                                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         window_url = f"http://127.0.0.1:{frontend_port}"
     else:
         print("🛠️ [开发模式] 使用 localhost 保持兼容...")
-        frontend_process = subprocess.Popen("npm run dev", shell=True, cwd=BASE_DIR, env=env_vars)
+        frontend_process = subprocess.Popen("npm run dev", shell=True, cwd=BASE_DIR, env=env_vars,
+                                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         window_url = f"http://localhost:{frontend_port}"
 
     write_port_config(backend_port)
@@ -162,13 +164,14 @@ if __name__ == "__main__":
         title='星辉云端·控制台',
         url=window_url,
         width=1440, height=900, min_size=(1024, 768),
-        background_color='#0f172a', resizable=True, frameless=True, easy_drag=False, js_api=api
+        # 使用系统标题栏提供可靠的拖动、最小化、最大化和关闭操作。
+        background_color='#0f172a', resizable=True, frameless=False, js_api=api
     )
 
     window.events.shown += on_shown
     window.events.closed += on_closed
 
     try:
-        webview.start(debug=True)
+        webview.start(debug=False)
     except KeyboardInterrupt:
         on_closed()

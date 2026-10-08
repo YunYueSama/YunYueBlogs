@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 from uuid import uuid4
 
 import httpx
@@ -107,7 +107,15 @@ def picbed_config() -> tuple[str, str, str]:
 
 
 def upload_url(base_url: str) -> str:
-    return base_url if urlparse(base_url).path.rstrip("/").endswith("/upload") else f"{base_url}/upload"
+    parsed = urlparse(base_url)
+    path = parsed.path.rstrip("/")
+    if not path.endswith("/upload"):
+        path += "/upload"
+    # CloudFlare ImgBed 的网页命名设置不会自动用于 API，上传时显式要求原名。
+    query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+             if key != "uploadNameType"]
+    query.append(("uploadNameType", "origin"))
+    return urlunparse(parsed._replace(path=path, query=urlencode(query)))
 
 
 async def read_limited(file: UploadFile) -> bytes:
@@ -234,7 +242,11 @@ async def upload_image(
     if not content or not detected_mime:
         return fail("invalid_image", "只支持 PNG、JPEG、GIF、WebP 或 AVIF 图片。", 415)
 
-    filename = re.sub(r"[^A-Za-z0-9._-]", "_", Path(file.filename or "image").name)[:120] or "image"
+    # 保留中文和空格，仅移除目录、控制字符及 multipart 文件名中的危险字符。
+    filename = (file.filename or "image").replace("\\", "/").rsplit("/", 1)[-1]
+    filename = re.sub(r'[\x00-\x1f\x7f"]', "_", filename)
+    if filename in {"", ".", ".."}:
+        filename = "image"
     try:
         timeout = httpx.Timeout(45.0, connect=8.0)
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:

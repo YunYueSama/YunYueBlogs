@@ -66,6 +66,27 @@ def ensure_frontend_build():
         return False
 
 
+def ensure_music_dependencies():
+    folder = os.path.join('services', 'music-gateway')
+    stamp = os.path.join(folder, 'node_modules', '.yunyue-lock')
+    import hashlib
+    with open(os.path.join(folder, 'package-lock.json'), 'rb') as file:
+        digest = hashlib.sha256(file.read()).hexdigest()
+    if os.path.exists(stamp):
+        with open(stamp, encoding='utf-8') as file:
+            if file.read() == digest:
+                return True
+    print('正在安装本机音乐服务依赖…')
+    try:
+        subprocess.check_call(['npm.cmd' if os.name == 'nt' else 'npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=folder)
+        with open(stamp, 'w', encoding='utf-8') as file:
+            file.write(digest)
+        return True
+    except (OSError, subprocess.CalledProcessError):
+        print('音乐服务依赖安装失败，请检查网络及 Node.js 环境')
+        return False
+
+
 def check_python_environment():
     """检查后端 Python 环境"""
     print("🔍 正在检查后端依赖 (Python)...")
@@ -85,7 +106,7 @@ if __name__ == "__main__":
     print("🌟 --- 星辉云端控制台 · 自动部署系统 --- 🌟")
 
     # 先查前端，再查后端
-    if check_node_environment() and check_python_environment() and ensure_frontend_build():
+    if check_node_environment() and check_python_environment() and ensure_music_dependencies() and ensure_frontend_build():
         print("\n🚀 所有环境准备就绪，正在点火启动...")
         # 启动 launcher.py
         # 后台输出保存在本地，桌面运行不再弹出控制台。

@@ -19,10 +19,15 @@ import subprocess
 import traceback
 from desktop_runtime import claim_instance, sync_assets
 from cms_core.main import app
+from cms_core.music_accounts import auto_daily_loop
+from cms_core.workspace import CONFIG_ROOT
+from music_runtime import start_gateway, stop_gateway
 
 frontend_process = None
 api_server = None
 api_thread = None
+music_process = None
+music_stop = threading.Event()
 WINDOW_CONFIG_FILE = os.path.join(EXE_DIR, 'window_config.json')
 
 def load_window_size():
@@ -105,6 +110,8 @@ def run_api(port):
 
 def on_closed(exit_code=0):
     # 仅停止本次启动的服务，避免端口被重用后误杀其他应用。
+    music_stop.set()
+    stop_gateway(music_process)
     if api_server:
         api_server.should_exit = True
     if api_thread and api_thread.is_alive():
@@ -130,6 +137,11 @@ if __name__ == "__main__":
     if not claim_instance(EXE_DIR):
         print("[启动] 控制台已在运行，已唤回现有窗口")
         sys.exit(0)
+    try:
+        music_process = start_gateway(CONFIG_ROOT / 'music-gateway.json')
+        threading.Thread(target=auto_daily_loop, args=(music_stop,), daemon=True).start()
+    except ValueError as error:
+        print(f'[音乐服务] {error}')
     frontend_port = get_free_port()
     backend_port = get_free_port()
     while backend_port == frontend_port:

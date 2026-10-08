@@ -1,0 +1,10 @@
+{
+  "name": "yunyue-local-music-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "start": "node server.cjs" },
+  "dependencies": {
+    "kugoumusicapi": "https://codeload.github.com/MakcRe/KuGouMusicApi/tar.gz/da5ccfd9304c043085a2fd18e94ebc5c315044ab",
+    "@neteasecloudmusicapienhanced/api": "4.41.1"
+  }
+}

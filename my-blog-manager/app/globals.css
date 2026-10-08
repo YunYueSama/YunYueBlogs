@@ -375,3 +375,14 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 640px) { .content-library-tools { grid-template-columns: minmax(0, 1fr); }.console-panel { padding: 16px; }.content-pagination { flex-wrap: wrap; }.quick-nav-dialog { padding: 18px; }.console-content { width: calc(100% - 24px); } }
 .quick-nav-dialog { margin: auto; }
 @media (max-width: 640px) { .data-table-wrap .data-table { display: table; min-width: 640px; }.data-table .title-cell { max-width: 340px; } }
+
+.music-account-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:20px; }
+.music-account-card { display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:20px;border:1px solid var(--console-line);border-radius:16px;background:rgba(100,116,139,.04); }
+.music-account-card > div { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+.music-account-card p, .music-account-card small { font-size:13px;line-height:1.7;opacity:.8; }
+.music-daily-toggle { display:flex;gap:10px;align-items:center;font-size:14px; }
+.music-login-qr { display:flex;align-items:center;justify-content:center;gap:24px;padding:24px; }
+.music-login-qr img { border:12px solid white;border-radius:16px; }
+.music-private-preview { display:flex;align-items:center;gap:20px;padding:20px;flex-wrap:wrap; }
+.music-private-preview audio { max-width:100%; }
+@media(max-width:900px) { .music-account-grid { grid-template-columns:1fr; } .music-login-qr { flex-direction:column; } }

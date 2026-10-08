@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, operations, picbed, projects, settings_v2, sync
+from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, music_accounts, operations, picbed, projects, settings_v2, sync
 from cms_core.workspace import import_legacy_content, workspace_counts
 
 app = FastAPI(title="星辉云端控制台 API", version="2.0.0", max_request_size=50 * 1024 * 1024)
@@ -26,6 +26,7 @@ def get_status():
 
 
 app.include_router(music.router, prefix="/api/music", tags=["Music"])
+app.include_router(music_accounts.router, prefix="/api/music/accounts", tags=["Music accounts"])
 app.include_router(config.router, prefix="/api/config", tags=["Config"])
 app.include_router(picbed.router, prefix="/api/picbed", tags=["PicBed"])
 app.include_router(drafts.router, prefix="/api/drafts", tags=["Drafts"])

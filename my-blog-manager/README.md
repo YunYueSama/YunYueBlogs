@@ -92,3 +92,14 @@ Remove-Item Env:YUNYUE_BUILD_DIR
 - 同一目录只运行一个桌面实例，重复启动会唤回已有窗口。首次升级前需先关闭没有实例保护的旧窗口。
 
 同步接口拒绝脏仓库、路径穿越和清单外改动，不执行 `reset`、`clean`、自动合并或强制推送。仓库更新只接受 fast-forward；提交信息必须包含中文，`workspace/config/secrets.json` 不得提交或复制到公开博客仓库。GitHub 推送成功后由 Vercel 仓库集成自动触发构建，控制台保存的 Vercel 项目地址仅用于查看最终部署状态。
+
+
+## 本机音乐账号与每日福利
+
+双击 `Start.bat` 会安装固定版本的音乐 SDK 并启动只监听 127.0.0.1 的私密 Node 网关。在“音乐 → 我的音乐账号”中分别用网易云、酷狗概念版手机端扫码确认。二维码 3 分钟过期；账号凭据仅在本机 `workspace/config/music-accounts.json` 保存，Windows 下使用当前用户 DPAPI 加密，不随内容同步。退出账号会清除凭据，酷狗退出同时关闭每日后台任务。
+
+歌曲候选和已有歌单都提供“本机账号试听”。会员、购买、地区和平台资格仍决定是否可取得完整音源；个人音源不会保存进公开歌单。公开博客只提供匿名完整音源，试听片段不会算作可发布歌曲。
+
+酷狗登录后默认启用每天自动领取福利。优先注册当前用户的 Windows 计划任务（每天 09:05、用户登录时）；若系统拒绝注册，使用当前用户启动项运行无窗口后台检查，关闭管理窗口仍有效。电脑必须开机、当前 Windows 用户已登录且网络可用。关闭自动领取开关会关闭后台任务；后台每 5 分钟检查，已确认当日领取不再领取，失败最多每小时重试一次。先查平台记录，再提交领取，再查记录；只在平台记录确认后显示“到账”。需要听歌、广告或其他操作时，应由用户在官方手机端正常完成，本程序不会伪造这些记录。手动“领取 / 核实”可重新确认状态。
+
+本机网关的依赖为 `@neteasecloudmusicapienhanced/api@4.41.1` 和 [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi) 固定提交 `da5ccfd9304c043085a2fd18e94ebc5c315044ab`。登录及福利流程参考 [kgka_Music_hl](https://github.com/umr-xiaomai/kgka_Music_hl) 与 [KugouMusic.NET](https://github.com/Linsxyx/KugouMusic.NET)；不使用其公共演示服务接收账号凭据。平台接口变更可能需要后续适配。

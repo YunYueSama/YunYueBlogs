@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   outputFileTracingExcludes: {
-    '*': ['workspace/**'],
+    '*': ['workspace/**', 'services/music-gateway/**'],
   },
 };
 

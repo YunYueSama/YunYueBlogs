@@ -48,7 +48,7 @@ def _validate_kugou(song_hash: str) -> dict[str, Any]:
         return _result(False, "kugou", "invalid_hash")
     playback = kugou.playback_info(song_hash)
     return {
-        **_result(bool(playback.get("available")), "kugou", str(playback.get("reason") or "playback_unavailable")),
+        **_result(bool(playback.get("available")), "kugou", "login_required" if "登录" in str(playback.get("reason")) else str(playback.get("reason") or "playback_unavailable")),
         "name": str(playback.get("name") or "")[:200],
         "artist": str(playback.get("artist") or "")[:200],
         "album": str(playback.get("album") or "")[:200],
@@ -74,8 +74,9 @@ def _validate_netease(song_id: str, name: str, artist: str, duration_ms: int) ->
     response.raise_for_status()
     payload = response.json()
     rows = payload.get("data", []) if isinstance(payload, dict) else []
-    url = rows[0].get("url") if rows and isinstance(rows[0], dict) else ""
-    if isinstance(url, str) and url.startswith(("https://", "http://")):
+    row = rows[0] if rows and isinstance(rows[0], dict) else {}
+    url = row.get("url")
+    if not row.get("freeTrialInfo") and isinstance(url, str) and url.startswith(("https://", "http://")):
         return _result(True, "netease", "")
 
     if name.strip():
@@ -86,7 +87,7 @@ def _validate_netease(song_id: str, name: str, artist: str, duration_ms: int) ->
             if fallback.get("available"):
                 return _result(True, "kugou", "netease_fallback")
 
-    return _result(False, "netease", "copyright_or_region")
+    return _result(False, "netease", "trial_only" if row.get("freeTrialInfo") else "payment_required" if row.get("fee") in (1, 4, 8) and not row.get("payed") else "copyright_or_region")
 
 
 def _netease_identity(song_id: str) -> tuple[str, str, int]:

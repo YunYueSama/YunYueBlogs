@@ -1,55 +1,34 @@
 @echo off
-chcp 65001 >nul 2>&1  :: 解决中文乱码问题
+chcp 65001 >nul 2>&1
+setlocal
 cd /d "%~dp0"
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
 
+:: 让解释器直接比较版本，避免 CMD 括号内变量提前展开和版本字符串误解析。
+py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if not errorlevel 1 goto use_py
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if not errorlevel 1 goto use_python
 
-echo [调试] 脚本所在目录：%~dp0
-echo [调试] 开始检测Python环境...
+echo [错误] 未找到 Python 3.10 或更高版本，请安装并添加到 PATH。
+goto failed
 
-:: 1. 优先尝试 py -3.10（兼容多Python版本）
-py -3.10 --version >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [状态] 正在调用 Python 3.10 环境...
-    py -3.10 run_me.py
-    if %errorlevel% neq 0 (
-        echo ❌ 错误：Python 3.10 执行 run_me.py 失败！
-        pause
-        exit /b 1
-    )
-    goto end
-)
+:use_py
+py -3 run_me.py
+if errorlevel 1 goto failed
+goto done
 
-:: 2. 尝试直接调用 python（检测是否是3.10+）
-python --version >nul 2>&1
-if %errorlevel% equ 0 (
-    :: 额外检测Python版本是否≥3.10
-    for /f "tokens=2 delims=." %%i in ('python --version 2^>^&1') do set "py_major=%%i"
-    for /f "tokens=3 delims=. " %%j in ('python --version 2^>^&1') do set "py_minor=%%j"
-    if %py_major% equ 3 if %py_minor% geq 10 (
-        echo [状态] 正在调用默认 Python 3.10+ 环境...
-        python run_me.py
-        if %errorlevel% neq 0 (
-            echo ❌ 错误：默认Python执行 run_me.py 失败！
-            pause
-            exit /b 1
-        )
-        goto end
-    ) else (
-        echo ❌ 错误：默认Python版本不是3.10！当前版本：
-        python --version
-        pause
-        exit /b 1
-    )
-)
+:use_python
+python run_me.py
+if errorlevel 1 goto failed
+goto done
 
-:: 3. 兜底：未找到Python环境
-echo ❌ 错误：未找到 Python 3.10 环境，请确保已安装并添加到系统PATH！
-echo 🔍 排查步骤：
-echo    1. 确认安装Python 3.10（官网：https://www.python.org/downloads/release/python-3100/）
-echo    2. 安装时勾选 "Add Python 3.10 to PATH"
-echo    3. 重启命令行/电脑后重试
+:failed
+echo [错误] 启动失败，请查看上方错误信息。
 pause
+exit /b 1
 
-:end
-echo ✅ 程序执行完成
+:done
+echo [状态] 启动准备完成。
 exit /b 0

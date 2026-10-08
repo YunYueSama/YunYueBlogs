@@ -92,4 +92,4 @@ if __name__ == "__main__":
                          creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
     else:
         print("\n⚠️ 环境检查未通过，请根据报错信息手动处理。")
-        input("按回车键退出...")
+        sys.exit(1)

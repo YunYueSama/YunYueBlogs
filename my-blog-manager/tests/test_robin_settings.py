@@ -48,7 +48,7 @@ def test_invalid_endpoint_is_rejected(url):
 def test_cloud_status_exposes_only_config_and_key_presence(monkeypatch):
     envs = [{'key': 'DEEPSEEK_API_KEY', 'value': 'secret', 'target': ['production']}, {'key': 'ROBIN_AI_FAST_MODEL', 'value': 'custom-model', 'target': ['production']}, {'key': 'UNRELATED_TOKEN', 'value': 'other-secret', 'target': ['production']}]
     monkeypatch.setattr(robin, 'cli', lambda *a, **kw: json.dumps({'envs': envs}))
-    result = robin.cloud_config(Path('.'), {'projectName': 'blog'})
+    result = robin.cloud_config(Path('.'), {'projectName': 'blog', 'projectId': 'prj_test'})
     assert result['apiKeyConfigured'] is True
     assert result['fastModel'] == 'custom-model'
     assert 'secret' not in json.dumps(result)

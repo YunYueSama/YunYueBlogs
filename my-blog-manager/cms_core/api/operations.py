@@ -230,7 +230,7 @@ def apply_operation(operation: Operation) -> list[str]:
         return ["data/friends.json"]
     if isinstance(operation, SettingsUpdateOperation):
         site = read_json(DATA_ROOT / "site.json", {})
-        forbidden = {"picBedToken", "geminiApiKey", "gitPassword", "clientSecret"}
+        forbidden = {"picBedToken", "geminiApiKey", "robinApiKey", "apiKey", "gitPassword", "clientSecret"}
         if forbidden.intersection(operation.payload.values):
             raise ValueError("公开设置操作不能包含私密凭据。")
         site.update(operation.payload.values)

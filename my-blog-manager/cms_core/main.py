@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, music_accounts, operations, picbed, projects, settings_v2, sync
+from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, music_accounts, operations, picbed, projects, settings_v2, sync, robin
 from cms_core.workspace import import_legacy_content, workspace_counts
 import asyncio
 from starlette.concurrency import run_in_threadpool
@@ -79,6 +79,7 @@ app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 app.include_router(deploy.router, prefix="/api/deploy", tags=["Deploy"])
 app.include_router(deploy.jobs_router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(settings_v2.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(robin.router, prefix="/api/robin", tags=["Robin"])
 app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
 
 app.add_middleware(

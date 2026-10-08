@@ -146,3 +146,13 @@ Remove-Item Env:YUNYUE_BUILD_DIR
 桌面版本位于 `.next-desktop-<版本标识>`，成功构建后更新本机启动指针，不覆盖正在运行的 `.next/standalone`。源码未变化时复用已有版本。构建失败保留上一成功版本与数据；版本目录均位于项目内，不接受项目外启动路径。
 
 Windows 桌面进程使用 Job 对象约束自己的子孙进程。正常关闭或进程异常退出后，系统自动终止该实例的前端与音乐进程；后端和每日检查线程随桌面退出。不会按 `node.exe` 或 `python.exe` 名称终止其他项目。登录凭据、文章、未发布队列仍保存在原本机工作区。
+
+## Robin 服务与模型配置
+
+“集成 → Robin AI 助手”替代旧 Gemini 密钥输入，独立于图床、Bangumi 和 Giscus 的保存操作。支持 DeepSeek 和 OpenAI 兼容接口，快速回答、深入思考各自指定完整模型 ID（下拉建议支持自定义名称）。配置写入 `workspace/config/robin.json`，密钥只写入被忽略的 `secrets.json`，API 仅返回是否已配置；留空保留，清除操作只影响本机密钥。
+
+“同步到 Vercel 并部署”使用已登录的本机 Vercel CLI 和发布页博客路径对应的 `.vercel/project.json`。仅同步 Production 的 `ROBIN_AI_BASE_URL`、`ROBIN_AI_FAST_MODEL`、`ROBIN_AI_DEEP_MODEL`；保存了新密钥时才写入 `ROBIN_AI_API_KEY`。已有 `DEEPSEEK_API_KEY` 或 Robin 密钥可直接保留，不拉取、不回显服务器密钥。切换服务地址须提供新密钥，避免把旧服务凭据交给新接口。
+
+环境变量同步后重建最新就绪的服务器正式部署，不发布本机内容；任务在 `/api/jobs/{id}` 查看，仅部署 READY 才显示完成。失败可能已写入部分变量，页面会明确提示检查并重试。恢复时在此处填回原接口和模型并重新同步；需要恢复密钥时重新填写原密钥。模型名称必须由服务商实际支持，模型调用沿用博客的快速/深入思考两个入口及现有 Robin 角色设定。
+
+新接口：`GET/POST /api/robin/config`（本机配置）、`GET /api/robin/cloud`（服务器状态，不含密钥）、`POST /api/robin/sync`（同步并部署）。服务只监听本机回环地址，不开放为公网管理 API。

@@ -1,8 +1,9 @@
 'use client';
 
-import { CheckCircle2, Cloud, CloudUpload, KeyRound, LoaderCircle, RefreshCw, Save, Sparkles } from 'lucide-react';
+import { CheckCircle2, Cloud, CloudUpload, KeyRound, LoaderCircle, RefreshCw, Save } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
+import RobinSettings from './RobinSettings';
 import { managerApi } from '../../lib/managerApi';
 
 type Integrations = {
@@ -26,9 +27,7 @@ const empty: Integrations = {
 export default function IntegrationForm() {
   const [data, setData] = useState(empty);
   const [picBedToken, setPicBedToken] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [clearPicBedToken, setClearPicBedToken] = useState(false);
-  const [clearGeminiApiKey, setClearGeminiApiKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingPicBed, setTestingPicBed] = useState(false);
@@ -53,7 +52,6 @@ export default function IntegrationForm() {
         picBedUrl: data.picBedUrl,
         picBedName: data.picBedName,
         ...(clearPicBedToken ? { picBedToken: '' } : picBedToken ? { picBedToken } : {}),
-        ...(clearGeminiApiKey ? { geminiApiKey: '' } : geminiApiKey ? { geminiApiKey } : {}),
       };
       const saved = await managerApi<Integrations>('/api/settings/integrations', {
         method: 'POST',
@@ -61,9 +59,7 @@ export default function IntegrationForm() {
       });
       setData(saved);
       setPicBedToken('');
-      setGeminiApiKey('');
       setClearPicBedToken(false);
-      setClearGeminiApiKey(false);
       setStatus({ message: '已保存到管理端工作区。Bangumi 与 Giscus 等公开配置需前往“发布”生成差异并同步；密钥只写入本机忽略目录。' });
     } catch (error) {
       setStatus({ error: true, message: error instanceof Error ? error.message : '保存失败' });
@@ -89,6 +85,7 @@ export default function IntegrationForm() {
   if (loading) return <div className="console-skeleton" />;
 
   return (
+    <div className="console-form">
     <form className="console-form" onSubmit={submit}>
       <section className="console-panel">
         <header>
@@ -137,20 +134,10 @@ export default function IntegrationForm() {
         </div>
       </section>
 
-      <section className="console-panel">
-        <header>
-          <div><h2><Sparkles size={18} /> AI 助手</h2><span>本机调试密钥与 Vercel 生产环境变量彼此独立</span></div>
-        </header>
-        <div className="form-field">
-          <label htmlFor="geminiKey">Gemini API Key {data.geminiApiKeyConfigured && <CheckCircle2 size={14} aria-label="已配置" />}</label>
-          <input id="geminiKey" type="password" autoComplete="new-password" value={geminiApiKey} onChange={(event) => { setGeminiApiKey(event.target.value); setClearGeminiApiKey(false); }} placeholder={data.geminiApiKeyConfigured ? '已配置，留空保持不变' : '尚未配置'} disabled={clearGeminiApiKey} />
-          {data.geminiApiKeyConfigured && <label className="inline-check"><input type="checkbox" checked={clearGeminiApiKey} onChange={(event) => { setClearGeminiApiKey(event.target.checked); if (event.target.checked) setGeminiApiKey(''); }} />清除已保存的 Gemini Key</label>}
-          <small>公开站 AI 使用 Vercel 的 <code>GEMINI_API_KEY</code>，本机密钥不会自动上传。</small>
-        </div>
-      </section>
-
       {status && <div className={`form-status ${status.error ? 'error' : ''}`} role={status.error ? 'alert' : 'status'} aria-live="polite">{status.message}</div>}
       <div><button className="console-action" type="submit" disabled={saving}>{saving ? <LoaderCircle className="animate-spin" size={16} /> : <Save size={16} />}保存集成配置</button></div>
     </form>
+    <RobinSettings />
+    </div>
   );
 }

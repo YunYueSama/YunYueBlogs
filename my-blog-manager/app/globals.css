@@ -394,3 +394,48 @@ a { color: inherit; text-decoration: none; }
 .music-private-preview { display:flex;align-items:center;gap:20px;padding:20px;flex-wrap:wrap; }
 .music-private-preview audio { max-width:100%; }
 @media(max-width:900px) { .music-account-grid { grid-template-columns:1fr; } .music-login-qr { flex-direction:column; } }
+/* 音乐页的平台标识和紧凑操作布局。 */
+.music-source-icon { display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;vertical-align:middle;color:#d93645; }
+.music-source-icon.is-kugou { color:#1689da; }
+.music-source-icon svg { width:100%;height:100%; }
+.music-account-grid { padding:0;align-items:start; }
+.music-account-card { min-width:0;background:#fff;gap:16px;border-radius:14px; }
+.music-account-card.is-netease { border-top:3px solid #e65d69;background:linear-gradient(135deg,#fff6f6,#fff 65%); }
+.music-account-card.is-kugou { border-top:3px solid #56a9e6;background:linear-gradient(135deg,#f1f8ff,#fff 65%); }
+.music-account-card > .music-account-heading { flex-wrap:nowrap;align-items:center; }
+.music-account-heading > .music-source-icon { padding:8px;border-radius:12px;background:#fff;box-shadow:0 2px 8px #17202a0a; }
+.music-account-heading strong { font-size:17px; }
+.music-account-card .music-account-state { display:flex;align-items:center;gap:6px;margin-top:5px;color:var(--console-muted);font-size:12px;opacity:1; }
+.music-account-state i { width:6px;height:6px;border-radius:50%;background:#aaa;flex:none; }
+.music-account-state i.is-ready { background:var(--console-cyan); }
+.music-account-card > .music-daily-benefit { display:grid;width:100%;gap:10px;padding-top:14px;border-top:1px solid var(--console-line); }
+.music-daily-benefit > strong { display:flex;align-items:center;gap:7px;font-size:13px; }
+.music-daily-benefit p { margin:0; }
+.music-daily-benefit details { font-size:12px;color:var(--console-muted);line-height:1.7; }
+.music-daily-benefit summary { cursor:pointer; }
+.music-daily-benefit details small { display:block;padding-top:6px; }
+.music-account-card .console-action { min-height:36px;padding:8px 12px;font-size:12px; }
+.music-accounts > header h2, .music-playlist-panel > header h2, .music-query-panel > header h2, .music-phone-login h3 { display:flex;align-items:center;gap:8px; }
+.console-panel > header .music-local-badge { display:inline-flex;align-items:center;gap:6px;margin:0;padding:6px 9px;border-radius:20px;background:#eff5f2;color:var(--console-cyan);font-size:11px;white-space:nowrap; }
+.music-playlist-panel { align-self:start; }
+.music-playlist-panel > header .integration-badge { display:inline-flex;align-items:center;gap:6px;margin:0; }
+.music-playlist-panel > header .integration-badge .status-dot { display:inline-block;margin:0; }
+.music-resource-cover { border-radius:9px; }
+.music-source-switch { gap:4px;padding:4px;background:#f3f4f2;border-radius:10px;border:0; }
+.music-source-switch button { display:flex;justify-content:center;align-items:center;gap:7px;border-radius:7px;background:transparent; }
+.music-source-switch button[aria-selected='true'] { background:white;color:var(--console-ink);box-shadow:0 1px 5px #17202a12; }
+.music-query-result { grid-template-columns:56px minmax(0,1fr) auto;gap:10px; }
+.music-candidate-actions { display:flex;align-items:center;gap:6px;flex-wrap:nowrap; }
+.music-resource-actions button, .music-candidate-actions button { border-radius:7px; }
+.music-query-result span.music-source-icon { display:inline-flex;margin:0;overflow:visible; }
+.music-resource-copy small { font-family:inherit;font-size:11px;line-height:1.6;font-weight:500; }
+.music-resource-copy small b { display:inline-flex;align-items:center;gap:3px;border-radius:4px;font-size:10px; }
+@media(max-width:1100px) { .music-playlist-panel > header { flex-wrap:wrap;gap:12px; } }
+@media(max-width:640px) {
+  .music-accounts > header, .music-playlist-panel > header { flex-direction:column;align-items:flex-start;gap:12px; }
+  .music-account-card { padding:16px; }
+  .music-query-result { grid-template-columns:48px minmax(0,1fr) auto;padding:10px 8px;gap:8px; }
+  .music-candidate-actions { gap:4px; }
+  .music-candidate-actions .console-icon { width:30px;min-width:30px;height:34px; }
+  .music-resource-copy small { white-space:normal; }
+}

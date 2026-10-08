@@ -1,7 +1,8 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- 二维码由本机音乐服务生成。 */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LoaderCircle, LogOut, QrCode, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { Gift, Headphones, LoaderCircle, LogOut, QrCode, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import MusicSourceIcon from './MusicSourceIcon';
 import { managerApi } from '../../lib/managerApi';
 
 type Source = 'netease' | 'kugou';
@@ -100,24 +101,25 @@ export default function MusicAccounts({ preview }: { preview?: { source: Source;
   }, [preview]);
 
   return <section className="console-panel span-12 music-accounts">
-    <header><div><h2>我的音乐账号</h2><span>扫码 / 手机号登录 · 本机账号试听 · 每日福利</span></div><ShieldCheck size={22} /></header>
+    <header><div><h2><Headphones size={19} />我的音乐账号</h2><span>登录你的音乐平台，让歌单与账号权益各就其位。</span></div><span className="music-local-badge"><ShieldCheck size={14} />仅保存在本机</span></header>
     <div className="music-account-grid">{(['netease', 'kugou'] as const).map((source) => {
       const account = accounts?.[source];
-      return <article key={source} className="music-account-card">
-        <div><strong>{names[source]}</strong><span className={`integration-badge ${account?.loggedIn ? 'is-ready' : ''}`}>{account?.loggedIn ? account.nickname : accounts ? '未登录' : '读取中'}</span></div>
+      return <article key={source} className={`music-account-card is-${source}`}>
+        <div className="music-account-heading"><MusicSourceIcon source={source} size={42} /><div><strong>{names[source]}</strong><small className="music-account-state"><i className={account?.loggedIn ? 'is-ready' : ''} />{account?.loggedIn ? account.nickname || '已登录账号' : accounts ? '未登录 · 选择一种登录方式' : '正在读取账号…'}</small></div></div>
         {account?.loggedIn ? <button type="button" className="console-action secondary" disabled={busy} onClick={() => void run(async () => { setAudio(''); setQr(null); await managerApi(`/api/music/accounts/${source}`, { method: 'DELETE' }); setMessage('已退出并清除本机登录凭据'); })}><LogOut size={15} />退出账号</button>
           : <div className="music-login-methods"><button type="button" className="console-action secondary" disabled={busy || !accounts} onClick={() => void run(async () => { cancelLogin(); const result = await managerApi<QR>(`/api/music/accounts/${source}/login`, { method: 'POST' }); setQr({ ...result, source }); setMessage(`请使用${names[source]}手机端扫码并确认`); })}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <QrCode size={15} />}扫码登录</button><button type="button" className="console-action secondary" disabled={busy || !accounts} onClick={() => { cancelLogin(); setPhoneSource(source); }}><Smartphone size={15} />手机号登录</button></div>}
-        {source === 'kugou' && account?.loggedIn && <>
+        {source === 'kugou' && account?.loggedIn && <div className="music-daily-benefit">
+          <strong><Gift size={16} />每日会员福利</strong>
           <label className="music-daily-toggle"><input type="checkbox" checked={account.autoDailyVip} disabled={busy} onChange={(event) => void run(() => managerApi('/api/music/accounts/kugou/daily', { method: 'PUT', body: JSON.stringify({ enabled: event.target.checked }) }))} />每天自动领取会员福利</label>
           <p>{account.daily?.date && `${account.daily.date} · `}{account.daily?.message || '领取前后会核对平台记录，仅在记录确认后显示到账'}</p>
-          <small>{account.scheduler?.message || '窗口运行期间会自动检查领取资格'}</small>
+          <details><summary>后台检查与领取说明</summary><small>{account.scheduler?.message || '窗口运行期间会自动检查领取资格'}</small></details>
           <button type="button" className="console-action secondary" disabled={busy} onClick={() => void run(async () => { const result = await managerApi<{ message: string }>('/api/music/accounts/kugou/daily', { method: 'POST' }); setMessage(result.message); })}><RefreshCw size={15} />领取 / 核实今日福利</button>
-        </>}
+        </div>}
       </article>;
     })}</div>
     {qr && <div className="music-login-qr"><img src={qr.image} width={192} height={192} alt={`${names[qr.source]}登录二维码`} /><div><strong>使用{names[qr.source]}扫码</strong><p>请在手机端确认登录，成功后这里会自动更新账号状态。</p><button type="button" className="console-action secondary" disabled={busy} onClick={() => { setQr({ ...qr }); setMessage("正在重新检查扫码状态…"); }}><RefreshCw size={15} />重新检查</button><button type="button" className="console-action secondary" onClick={() => { cancelLogin(); setMessage('已取消扫码'); }}>取消扫码</button></div></div>}
     {phoneSource && <form className="music-phone-login" onSubmit={(event) => { event.preventDefault(); if (!smsId || busy) return; void run(async () => { const result = await managerApi<{ message: string }>(`/api/music/accounts/${phoneSource}/sms/login`, { method: 'POST', body: JSON.stringify({ loginId: smsId, code }) }); setMessage(result.message); setPhoneSource(null); setPhone(''); setCode(''); setSmsId(''); }); }}>
-      <h3>{names[phoneSource]} · 手机号验证码登录</h3>
+      <h3><MusicSourceIcon source={phoneSource} size={24} />{names[phoneSource]} · 手机号验证码登录</h3>
       <label>中国大陆手机号<input type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={11} value={phone} disabled={busy || !!smsId} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} placeholder="请输入 11 位手机号" required pattern="1[3-9][0-9]{9}" /></label>
       <div className="music-phone-code"><label>短信验证码<input inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} placeholder="4 至 8 位验证码" disabled={busy || !smsId} /></label><button type="button" className="console-action secondary" disabled={busy || remaining > 0 || !/^1[3-9]\d{9}$/.test(phone)} onClick={() => void run(async () => { setRetryAt(Date.now() + 60000); const result = await managerApi<{ loginId: string; retryAfter: number; message: string }>(`/api/music/accounts/${phoneSource}/sms/send`, { method: 'POST', body: JSON.stringify({ phone }) }); setSmsId(result.loginId); setRetryAt(Date.now() + result.retryAfter * 1000); setMessage(result.message); })}>{remaining > 0 ? `${remaining} 秒后重发` : smsId ? '重新发送' : '获取验证码'}</button></div>
       <div className="music-login-methods"><button type="submit" className="console-action" disabled={busy || !smsId || !/^\d{4,8}$/.test(code)}>{busy ? '处理中…' : '验证并登录'}</button><button type="button" className="console-action secondary" disabled={busy} onClick={cancelLogin}>取消 / 更换登录方式</button></div>

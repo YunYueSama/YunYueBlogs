@@ -1,10 +1,11 @@
 'use client';
-/* eslint-disable @next/next/no-img-element -- Music covers are supplied by the selected remote source. */
 
-import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, CircleAlert, Disc3, Languages, LoaderCircle, Music2, Plus, RefreshCw, Save, Search, Trash2, Waves } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, CircleAlert, Languages, ListMusic, LoaderCircle, Music2, Plus, RefreshCw, Save, Search, Trash2, Waves } from 'lucide-react';
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { managerApi } from '../../lib/managerApi';
 import MusicAccounts from './MusicAccounts';
+import MusicCover from './MusicCover';
+import MusicSourceIcon from './MusicSourceIcon';
 
 type MusicSource = 'netease' | 'kugou';
 type TrackReference = {
@@ -25,7 +26,7 @@ type MusicSettings = { musicIds: string[]; musicTracks: TrackReference[]; tracks
 type LyricStatus = { available: boolean; source: 'kugou'; format?: string; wordTimed?: boolean; candidate?: { song: string; artist: string }; reason?: string };
 type PlaybackStatus = { available: boolean; playbackSource: MusicSource; reason?: string; name?: string; artist?: string; album?: string; cover?: string; albumAudioId?: string };
 type Track = TrackReference & { name: string; artist: string; album: string; cover: string; durationMs?: number; playbackAvailable?: boolean; playbackSource?: MusicSource; playbackReason?: string; lyric?: LyricStatus };
-type TrackResult = { track?: Track; error?: string };
+type TrackResult = { track?: Track; error?: string; checking?: boolean };
 
 const playbackReasons: Record<string, string> = {
   payment_required: '该版本需要会员或购买权益，可登录后本机试听，或选择其他版本发布',
@@ -34,10 +35,10 @@ const playbackReasons: Record<string, string> = {
   copyright_or_region: '平台未提供完整音源，可能受版权或地区限制',
 };
 
-async function mapLimited<T, R>(items: T[], task: (item: T) => Promise<R>): Promise<R[]> {
+async function mapLimited<T, R>(items: T[], task: (item: T) => Promise<R>, limit = 3): Promise<R[]> {
   const output: R[] = new Array(items.length);
   let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(3, items.length) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (cursor < items.length) { const index = cursor++; output[index] = await task(items[index]); }
   }));
   return output;
@@ -83,12 +84,12 @@ export default function MusicManager() {
     return managerApi<LyricStatus>(`/api/music/lyrics/status?${params.toString()}`);
   }, []);
 
-  const queryTrack = useCallback(async (reference: TrackReference, force = false): Promise<TrackResult> => {
+  const queryTrack = useCallback(async (reference: TrackReference, force = false, metadata?: Track): Promise<TrackResult> => {
     try {
       let base: Track;
       if (reference.source === 'netease') {
-        const result = await managerApi<{ id: string; name: string; artist: string; album: string; cover: string; durationMs: number }>(`/api/music/query/${reference.id}`);
-        const params = new URLSearchParams({ name: result.name, artist: result.artist, durationMs: String(result.durationMs) });
+        const result = metadata || await managerApi<{ id: string; name: string; artist: string; album: string; cover: string; durationMs: number }>(`/api/music/query/${reference.id}`);
+        const params = new URLSearchParams({ name: result.name, artist: result.artist, durationMs: String(result.durationMs || 0) });
         if (force) params.set('refresh', 'true');
         const playback = await managerApi<PlaybackStatus>(`/api/music/playback/netease/${reference.id}/status?${params.toString()}`);
         base = { ...reference, ...result, key: referenceKey(reference), source: 'netease', playbackAvailable: playback.available, playbackSource: playback.playbackSource, playbackReason: playback.reason };
@@ -119,13 +120,31 @@ export default function MusicManager() {
       }
       return { track: { ...base, lyric } };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : '歌曲资源查询失败' };
+      return { track: metadata, error: error instanceof Error ? error.message : '歌曲资源查询失败' };
     }
   }, [lyricStatus]);
 
   const refreshTracks = useCallback(async (nextReferences: TrackReference[], mode: 'load' | 'refresh' = 'load') => {
     if (mode === 'refresh') setBusy('refresh');
-    const results = await mapLimited(nextReferences, async (reference) => [referenceKey(reference), await queryTrack(reference, mode === 'refresh')] as const);
+    setTracks((current) => ({ ...current, ...Object.fromEntries(nextReferences.map((reference) => [referenceKey(reference), {
+      track: current[referenceKey(reference)]?.track || { ...reference, name: reference.name || '正在读取歌曲', artist: reference.artist || '', album: reference.album || '', cover: reference.cover || '' }, checking: true,
+    }])) }));
+    // 先并发读取轻量歌曲资料，封面不再等待慢速音源和歌词检查。
+    const metadata = Object.fromEntries(await mapLimited(nextReferences, async (reference) => {
+      if (reference.source !== 'netease') return [referenceKey(reference), undefined] as const;
+      try {
+        const details = await managerApi<{ id: string; name: string; artist: string; album: string; cover: string; durationMs: number }>(`/api/music/query/${reference.id}`);
+        const track: Track = { ...reference, ...details, key: referenceKey(reference) };
+        setTracks((current) => ({ ...current, [track.key]: { track, checking: true } }));
+        return [track.key, track] as const;
+      } catch { return [referenceKey(reference), undefined] as const; }
+    }, 6));
+    const results = await mapLimited(nextReferences, async (reference) => {
+      const key = referenceKey(reference);
+      const result = await queryTrack(reference, mode === 'refresh', metadata[key]);
+      setTracks((current) => ({ ...current, [key]: result }));
+      return [key, result] as const;
+    });
     const mapped = Object.fromEntries(results);
     setTracks((current) => ({ ...current, ...mapped }));
     if (mode === 'refresh') {
@@ -153,7 +172,7 @@ export default function MusicManager() {
 
   const canQuery = source === 'netease' ? /^\d{1,20}$/.test(candidate.trim()) : candidate.trim().length >= 2;
   const unavailableCount = useMemo(() => references.filter((reference) => isUnavailable(tracks[referenceKey(reference)])).length, [references, tracks]);
-  const checkingCount = useMemo(() => references.filter((reference) => !tracks[referenceKey(reference)]).length, [references, tracks]);
+  const checkingCount = useMemo(() => references.filter((reference) => !tracks[referenceKey(reference)] || tracks[referenceKey(reference)].checking).length, [references, tracks]);
 
   const lookup = async (event: FormEvent) => {
     event.preventDefault();
@@ -274,8 +293,8 @@ export default function MusicManager() {
 
   return <div className="console-grid">
     <MusicAccounts preview={preview} />
-    <section className="console-panel span-8">
-      <header><div><h2>双源播放列表</h2><span>网易云与酷狗共用一个播放器；最多 12 首</span></div><div className="music-validation-actions"><span className={`integration-badge ${unavailableCount === 0 && checkingCount === 0 ? 'is-ready' : ''}`}><span className={`status-dot ${unavailableCount ? 'warn' : ''}`} />{checkingCount ? `${checkingCount} 首检查中` : unavailableCount ? `${unavailableCount} 首不可播放` : `${references.length} 首可播放`}</span><button className="console-action secondary" type="button" onClick={() => void refreshTracks(references, 'refresh')} disabled={Boolean(busy) || Boolean(validatingTrack) || !references.length}>{busy === 'refresh' ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}检查全部</button></div></header>
+    <section className="console-panel music-playlist-panel span-8">
+      <header><div><h2><ListMusic size={19} />双源播放列表</h2><span>网易云与酷狗共用一个播放器；最多 12 首</span></div><div className="music-validation-actions"><span className={`integration-badge ${unavailableCount === 0 && checkingCount === 0 ? 'is-ready' : ''}`}><span className={`status-dot ${unavailableCount ? 'warn' : ''}`} />{checkingCount ? `${checkingCount} 首检查中` : unavailableCount ? `${unavailableCount} 首不可播放` : `${references.length} 首可播放`}</span><button className="console-action secondary" type="button" onClick={() => void refreshTracks(references, 'refresh')} disabled={Boolean(busy) || Boolean(validatingTrack) || !references.length}>{busy === 'refresh' ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}检查全部</button></div></header>
       <div className="music-resource-list">
         {references.length ? references.map((reference, index) => {
           const key = referenceKey(reference);
@@ -288,8 +307,8 @@ export default function MusicManager() {
           return <Fragment key={key}>
             <article className={unavailable ? 'is-unavailable' : undefined}>
               <span className="music-resource-index">{String(index + 1).padStart(2, '0')}</span>
-              <div className="music-resource-cover">{track?.cover ? <img src={track.cover} alt="" referrerPolicy="no-referrer" /> : <Disc3 size={22} />}</div>
-              <div className="music-resource-copy"><strong>{track?.name || reference.name || (result?.error ? '资源暂不可用' : '正在读取歌曲')}</strong><span>{track ? `${track.artist}${track.album ? ` · ${track.album}` : ''}` : result?.error || key}</span><small><b data-source={reference.source}>{reference.source === 'kugou' ? '酷狗' : '网易云'}</b> · {unavailable ? '音源不可播放' : !result ? '正在检查音源' : preciseLyric ? '音频可用 / KRC 逐字歌词' : '音频可用 / 普通歌词回退'} · {formatOffset(lyric.offsetMs)}</small>{unavailable && <em><CircleAlert size={13} />{playbackReasons[track?.playbackReason || ''] || '当前版本没有匿名完整音源，请更换版本'}</em>}</div>
+              <MusicCover src={track?.cover || reference.cover} />
+              <div className="music-resource-copy"><strong>{track?.name || reference.name || (result?.error ? '资源暂不可用' : '正在读取歌曲')}</strong><span>{track ? `${track.artist}${track.album ? ` · ${track.album}` : ''}` : result?.error || key}</span><small><b data-source={reference.source}><MusicSourceIcon source={reference.source} size={12} />{reference.source === 'kugou' ? '酷狗' : '网易云'}</b> · {unavailable ? '音源不可播放' : !result || result.checking ? '正在检查音源' : preciseLyric ? '音频可用 / KRC 逐字歌词' : '音频可用 / 普通歌词回退'} · {formatOffset(lyric.offsetMs)}</small>{unavailable && <em><CircleAlert size={13} />{playbackReasons[track?.playbackReason || ''] || '当前版本没有匿名完整音源，请更换版本'}</em>}</div>
               <div className="music-resource-actions"><button type="button" onClick={() => setPreview({ ...reference })} title="本机账号试听" aria-label={`本机试听 ${track?.name || reference.name || key}`}><Music2 size={15} /></button><button type="button" onClick={() => setExpandedTrack(expanded ? null : key)} title="歌词状态与校准" aria-label={`${track?.name || reference.name || key} 歌词设置`} aria-expanded={expanded}><Waves size={15} />{expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button><button type="button" onClick={() => move(index, -1)} disabled={index === 0} title="上移" aria-label={`上移 ${track?.name || key}`}><ArrowUp size={15} /></button><button type="button" onClick={() => move(index, 1)} disabled={index === references.length - 1} title="下移" aria-label={`下移 ${track?.name || key}`}><ArrowDown size={15} /></button><button type="button" onClick={() => remove(key)} title="移除" aria-label={`移除 ${track?.name || key}`}><Trash2 size={15} /></button></div>
             </article>
             {expanded && <div className="music-lyric-settings music-auto-lyric-settings">
@@ -305,13 +324,13 @@ export default function MusicManager() {
     </section>
 
     <section className="console-panel span-4 music-query-panel">
-      <header><div><h2>添加音乐</h2><span>网易云 ID 或酷狗关键词</span></div></header>
-      <div className="music-source-switch" role="tablist" aria-label="音乐来源"><button type="button" role="tab" aria-selected={source === 'netease'} onClick={() => { setSource('netease'); setCandidate(''); setCandidateTracks([]); }}>网易云</button><button type="button" role="tab" aria-selected={source === 'kugou'} onClick={() => { setSource('kugou'); setCandidate(''); setCandidateTracks([]); }}>酷狗</button></div>
+      <header><div><h2><Music2 size={19} />添加音乐</h2><span>网易云 ID 或酷狗关键词</span></div></header>
+      <div className="music-source-switch" role="tablist" aria-label="音乐来源"><button type="button" role="tab" aria-selected={source === 'netease'} onClick={() => { setSource('netease'); setCandidate(''); setCandidateTracks([]); }}><MusicSourceIcon source="netease" size={19} />网易云</button><button type="button" role="tab" aria-selected={source === 'kugou'} onClick={() => { setSource('kugou'); setCandidate(''); setCandidateTracks([]); }}><MusicSourceIcon source="kugou" size={19} />酷狗</button></div>
       <form className="console-form" onSubmit={lookup}>
         <div className="form-field"><label htmlFor="musicQuery">{source === 'netease' ? '网易云歌曲 ID' : '酷狗歌曲关键词'}</label><input id="musicQuery" inputMode={source === 'netease' ? 'numeric' : 'search'} maxLength={100} value={candidate} onChange={(event) => { setCandidate(source === 'netease' ? event.target.value.replace(/\D/g, '') : event.target.value); setCandidateTracks([]); }} placeholder={source === 'netease' ? '例如：1809646618' : '歌曲名或 歌曲名 + 歌手'} /><small>{references.length}/12 首</small></div>
         <button className="console-action secondary" type="submit" disabled={!canQuery || Boolean(busy)}>{busy === 'query' ? <LoaderCircle className="animate-spin" size={16} /> : <Search size={16} />}{source === 'netease' ? '查询歌曲' : '搜索酷狗'}</button>
       </form>
-      {candidateTracks.length > 0 && <div className="music-query-results">{candidateTracks.map((track) => { const key = referenceKey(track); return <div className="music-query-result" key={key}><div className="music-resource-cover">{track.cover ? <img src={track.cover} alt="" referrerPolicy="no-referrer" /> : <Disc3 size={22} />}</div><div><strong>{track.name}</strong><span>{track.artist}{track.album ? ` · ${track.album}` : ''}</span></div><button className="console-icon" type="button" onClick={() => setPreview({ ...track })} title="本机账号试听" aria-label={`本机试听 ${track.name}`}><Music2 size={17} /></button><button className="console-icon" type="button" onClick={() => void addTrack(track)} disabled={references.length >= 12 || Boolean(validatingTrack)} title="检查并加入播放列表" aria-label={`检查并加入 ${track.name}`}>{validatingTrack === key ? <LoaderCircle className="animate-spin" size={17} /> : <Plus size={17} />}</button></div>; })}</div>}
+      {candidateTracks.length > 0 && <div className="music-query-results">{candidateTracks.map((track) => { const key = referenceKey(track); return <div className="music-query-result" key={key}><MusicCover src={track.cover} /><div><strong>{track.name}</strong><span>{track.artist}{track.album ? ` · ${track.album}` : ''}</span></div><div className="music-candidate-actions"><button className="console-icon" type="button" onClick={() => setPreview({ ...track })} title="本机账号试听" aria-label={`本机试听 ${track.name}`}><Music2 size={17} /></button><button className="console-icon" type="button" onClick={() => void addTrack(track)} disabled={references.length >= 12 || Boolean(validatingTrack)} title="检查并加入播放列表" aria-label={`检查并加入 ${track.name}`}>{validatingTrack === key ? <LoaderCircle className="animate-spin" size={17} /> : <Plus size={17} />}</button></div></div>; })}</div>}
       <div className="console-note music-query-note"><Waves size={16} />酷狗歌曲直接使用 Hash；网易云歌曲会按歌名和歌手补查酷狗 KRC，失败时无感回退到网易云歌词。</div>
     </section>
     {status && <div className={`form-status span-12 ${status.error ? 'error' : ''}`} role={status.error ? 'alert' : 'status'}>{status.message}</div>}

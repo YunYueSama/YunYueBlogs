@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from cms_core.workspace import CONTENT_ROOT, DATA_ROOT, PLANS_ROOT, ensure_workspace, import_legacy_content, read_json, write_json_atomic
+from cms_core import cloud_content
 
 router = APIRouter()
 MANIFEST_NAME = ".yunyue-managed.json"
@@ -115,7 +116,8 @@ def digest_files(files: dict[str, Path]) -> str:
 
 
 def file_digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    # Git 在 Windows 检出时可能转换换行；内容预览忽略这一差异，防止把服务器原文误报为更新。
+    return hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
 
 
 @router.post("/migrate")
@@ -154,6 +156,7 @@ def create_sync_plan(payload: SyncRequest):
 
     plan_id = uuid.uuid4().hex
     plan = {
+        "remoteRevision": cloud_content.status().get('revision'),
         "planId": plan_id,
         "createdAt": int(time.time()),
         "target": str(target),
@@ -178,6 +181,9 @@ def apply_sync_plan(payload: ApplyRequest):
         return fail("plan_not_found", "同步计划不存在或不属于当前仓库。", 404)
     if not plan.get("canApply"):
         return fail("dirty_repository", "目标仓库在生成计划时存在未提交改动。", 409, plan.get("dirtyFiles", []))
+    from cms_core import cloud_content
+    if plan.get('remoteRevision') and plan['remoteRevision'] != cloud_content.status().get('revision'):
+        return fail('remote_changed', '服务器内容已更新，请重新生成发布预览。', 409)
     with SYNC_LOCK:
         if git_changes(target):
             return fail("repository_changed", "生成计划后目标仓库状态发生变化，请重新预览。", 409)
@@ -224,6 +230,7 @@ def apply_sync_plan(payload: ApplyRequest):
                             stale.unlink()
 
                     manifest = {
+                        "remoteRevision": plan.get('remoteRevision'),
                         "schemaVersion": 2,
                         "generatedAt": int(time.time()),
                         "files": sorted(files),

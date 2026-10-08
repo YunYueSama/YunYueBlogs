@@ -6,8 +6,8 @@ export const metadata = {
   description: '管理生活动态、地点与图片。',
 };
 
-export default function MomentsPage() {
-  const allMoments = listMoments();
+export default async function MomentsPage() {
+  const allMoments = await listMoments();
 
   return <MomentList moments={allMoments} />;
 }

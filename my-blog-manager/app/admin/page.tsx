@@ -5,8 +5,8 @@ import { contentCounts, readDeployConfig } from '../../lib/workspaceData';
 
 export const dynamic = 'force-dynamic';
 
-export default function AdminDashboard() {
-  const counts = contentCounts();
+export default async function AdminDashboard() {
+  const counts = await contentCounts();
   const deploy = readDeployConfig();
   return <>
     <PageHeader eyebrow="Workspace overview" title="概览" description="从写作到 Vercel 发布的本地工作台。所有高风险操作都必须先生成差异预览。" actions={<Link className="console-action" href="/publish">查看发布状态 <ArrowUpRight size={16} /></Link>} />

@@ -36,6 +36,8 @@ def import_legacy_content() -> dict[str, Any]:
     """Idempotently imports existing local content without deleting the source."""
     ensure_workspace()
     copied: list[str] = []
+    if read_json(CONFIG_ROOT / 'cloud-content.json', {}).get('enabled'):
+        return {"copied": [], "counts": workspace_counts()}
 
     for folder in ("posts", "chatters", "moments"):
         source = MANAGER_ROOT / folder

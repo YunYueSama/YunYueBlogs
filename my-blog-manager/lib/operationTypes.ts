@@ -17,7 +17,7 @@ export type OperationPayloadMap = {
 };
 
 export type OperationType = keyof OperationPayloadMap;
-type OperationBase = { id: string; label: string; description: string; timestamp: string };
+type OperationBase = { id: string; label: string; description: string; timestamp: string; cloudRevision?: string };
 
 export type Operation = {
   [K in OperationType]: OperationBase & { type: K; payload: OperationPayloadMap[K] }

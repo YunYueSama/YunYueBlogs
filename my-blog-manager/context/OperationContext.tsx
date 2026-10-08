@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { managerApi } from '../lib/managerApi';
+import { managerApi, currentCloudRevision } from '../lib/managerApi';
 import type { Operation, OperationInput } from '../lib/operationTypes';
 
 interface OperationContextType {
@@ -90,6 +90,7 @@ export function OperationProvider({ children }: { children: React.ReactNode }) {
       id: operation.id || crypto.randomUUID().replaceAll('-', '_'),
       description: operation.description || '',
       timestamp: operation.timestamp || new Date().toISOString(),
+      cloudRevision: currentCloudRevision(),
     } as Operation;
     update((current) => {
       if (singletonOperationTypes.has(next.type)) {

@@ -28,6 +28,7 @@ class StrictModel(BaseModel):
 
 
 class OperationBase(StrictModel):
+    cloudRevision: str | None = Field(default=None, pattern=r'^[a-f0-9]{40,64}$')
     id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     label: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=1_000)
@@ -267,6 +268,10 @@ def apply_operations():
             return fail("operation_queue_invalid", "操作队列格式无效。", 422, error.errors(include_input=False))
         if not queue.operations:
             return fail("operation_queue_empty", "操作队列为空。", 409)
+        from cms_core import cloud_content
+        cloud = cloud_content.status()
+        if cloud.get('enabled') and any(item.cloudRevision != cloud.get('revision') for item in queue.operations):
+            return fail('stale_operations', '操作队列基于旧版本，请保留输入并刷新服务器内容后重新编辑。', 409)
 
         operations = resolve_new_content_ids(queue.operations)
         paths = {path for operation in operations for path in operation_paths(operation)}

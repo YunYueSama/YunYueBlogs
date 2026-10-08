@@ -1,11 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
+import { connection } from 'next/server';
 
 const managerRoot = process.env.YUNYUE_MANAGER_ROOT
   ? path.resolve(process.env.YUNYUE_MANAGER_ROOT)
   : process.cwd();
 const workspaceRoot = path.join(/*turbopackIgnore: true*/ managerRoot, 'workspace');
+
+async function prepareWorkspace() {
+  await connection();
+  const port = JSON.parse(fs.readFileSync(path.join(/*turbopackIgnore: true*/ managerRoot, 'public/backend_config.json'), 'utf8')).api_port;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('后台连接配置无效，请重启控制台');
+  const response = await fetch(`http://127.0.0.1:${port}/api/cloud/refresh`, { cache: 'no-store', signal: AbortSignal.timeout(60_000) });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error?.message || '无法同步服务器内容，请稍后重试');
+}
 
 const contentPaths = {
   posts: path.join(workspaceRoot, 'content', 'posts'),
@@ -23,7 +33,8 @@ export function contentDirectory(type: 'posts' | 'chatters' | 'moments') {
   return contentPaths[type];
 }
 
-export function contentCounts() {
+export async function contentCounts() {
+  await prepareWorkspace();
   return Object.fromEntries((['posts', 'chatters', 'moments'] as const).map((type) => {
     const directory = contentDirectory(type);
     const count = fs.existsSync(directory) ? fs.readdirSync(directory).filter((name) => name.endsWith('.md')).length : 0;
@@ -31,7 +42,8 @@ export function contentCounts() {
   })) as Record<'posts' | 'chatters' | 'moments', number>;
 }
 
-export function listDocuments(type: 'posts' | 'chatters') {
+export async function listDocuments(type: 'posts' | 'chatters') {
+  await prepareWorkspace();
   const directory = contentDirectory(type);
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory).filter((name) => name.endsWith('.md')).map((name) => {
@@ -49,7 +61,8 @@ export interface WorkspaceMoment {
   content: string;
 }
 
-export function listMoments(): WorkspaceMoment[] {
+export async function listMoments(): Promise<WorkspaceMoment[]> {
+  await prepareWorkspace();
   const directory = contentDirectory('moments');
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory).filter((name) => name.endsWith('.md')).map((name) => {
@@ -64,7 +77,8 @@ export function listMoments(): WorkspaceMoment[] {
   }).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export function readWorkspaceJson<T>(name: keyof typeof dataPaths, fallback: T): T {
+export async function readWorkspaceJson<T>(name: keyof typeof dataPaths, fallback: T): Promise<T> {
+  await prepareWorkspace();
   const file = dataPaths[name];
   try { return JSON.parse(fs.readFileSync(file, 'utf8')) as T; } catch { return fallback; }
 }

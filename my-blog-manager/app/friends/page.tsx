@@ -7,7 +7,7 @@ export const metadata = {
   description: '管理公开友链、头像与站点简介。',
 };
 
-export default function FriendsPage() {
-  const friends = readWorkspaceJson<FriendRecord[]>('friends', []);
+export default async function FriendsPage() {
+  const friends = await readWorkspaceJson<FriendRecord[]>('friends', []);
   return <FriendsBoard initialFriends={friends} />;
 }

@@ -4,6 +4,7 @@ import './globals.css';
 import ConsoleShell from '../components/manager/ConsoleShell';
 import { ToastProvider } from '../components/ToastProvider';
 import { OperationProvider } from '../context/OperationContext';
+import CloudContentStatus from '../components/manager/CloudContentStatus';
 
 export const metadata: Metadata = {
   title: { default: '星辉云端控制台', template: '%s | 星辉云端' },
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body><OperationProvider><ToastProvider><ConsoleShell>{children}</ConsoleShell></ToastProvider></OperationProvider></body>
+      <body><OperationProvider><ToastProvider><ConsoleShell><CloudContentStatus />{children}</ConsoleShell></ToastProvider></OperationProvider></body>
     </html>
   );
 }

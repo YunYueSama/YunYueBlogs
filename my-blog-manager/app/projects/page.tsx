@@ -7,7 +7,7 @@ export const metadata = {
   description: '管理公开项目、技术栈与仓库地址。',
 };
 
-export default function ProjectsPage() {
-  const projects = readWorkspaceJson<ProjectRecord[]>('projects', []);
+export default async function ProjectsPage() {
+  const projects = await readWorkspaceJson<ProjectRecord[]>('projects', []);
   return <ProjectsBoard initialProjects={projects} />;
 }

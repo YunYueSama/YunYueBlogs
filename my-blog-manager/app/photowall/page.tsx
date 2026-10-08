@@ -7,7 +7,7 @@ export const metadata = {
   description: '管理公开相册、封面与照片说明。',
 };
 
-export default function PhotoWallPage() {
-  const albums = readWorkspaceJson<AlbumRecord[]>('albums', []);
+export default async function PhotoWallPage() {
+  const albums = await readWorkspaceJson<AlbumRecord[]>('albums', []);
   return <GalleryManager initialAlbums={albums} />;
 }

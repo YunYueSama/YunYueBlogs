@@ -219,6 +219,10 @@ def _run_push(job_id: str, target: Path, payload: PushRequest, paths: list[str],
         write_json_atomic(job_path, {**read_json(job_path, {}), "status": "running", "message": "正在创建中文提交并推送。"})
         if git_changes(target) != paths or _snapshot(target, paths) != snapshot:
             raise RuntimeError("排队后仓库内容发生变化，请重新执行发布。")
+        from cms_core import cloud_content
+        if cloud_content.status().get('enabled'):
+            manifest = read_json(target / MANIFEST_NAME, {})
+            cloud_content.require_revision(manifest.get('remoteRevision'))
         remote_check = _git(target, ["ls-remote", "--exit-code", payload.remote])
         if remote_check.returncode != 0:
             raise RuntimeError("Git 远程仓库不可访问，请检查网络、权限和 Remote 配置：" + remote_check.stderr.strip())

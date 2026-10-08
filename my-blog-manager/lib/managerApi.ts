@@ -1,4 +1,6 @@
 let cachedBase: Promise<string> | undefined;
+let cloudRevision: string | undefined;
+export const currentCloudRevision = () => cloudRevision;
 
 export function getApiBase() {
   if (!cachedBase) {
@@ -20,6 +22,7 @@ export async function managerApi<T>(path: string, init?: RequestInit): Promise<T
   const base = await getApiBase();
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const headers = new Headers(init?.headers);
+  if (cloudRevision) headers.set('X-YunYue-Revision', cloudRevision);
   if (init?.body && !isFormData && !headers.has('content-type')) headers.set('content-type', 'application/json');
   let response: Response;
   try {
@@ -34,6 +37,11 @@ export async function managerApi<T>(path: string, init?: RequestInit): Promise<T
     throw new Error('无法连接本地服务，请检查控制台是否正常运行');
   }
   const payload = await response.json().catch(() => null);
+  const revision = response.headers.get('X-YunYue-Revision');
+  if (revision && cloudRevision && revision !== cloudRevision && path !== '/api/cloud/connect') {
+    throw new Error('服务器内容已更新，请刷新页面后再继续；尚未提交的输入请先保留。');
+  }
+  if (revision) cloudRevision = revision;
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error?.message || `请求失败（${response.status}）`);
   if (!payload || payload.ok !== true || !('data' in payload)) throw new Error('服务返回的数据格式异常，请重试或重启控制台');
   return payload?.data as T;

@@ -3,16 +3,53 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, music_accounts, operations, picbed, projects, settings_v2, sync
 from cms_core.workspace import import_legacy_content, workspace_counts
+import asyncio
+from starlette.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
+from cms_core import cloud_content
+
+cloud_requests = asyncio.Lock()
 
 app = FastAPI(title="星辉云端控制台 API", version="2.0.0", max_request_size=50 * 1024 * 1024)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
-    allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):\d+$",
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
-)
+
+@app.middleware('http')
+async def synchronize_cloud_content(request, call_next):
+    path = request.url.path
+    managed = path.startswith(('/api/settings', '/api/gallery', '/api/projects', '/api/friends', '/api/moments', '/api/operations', '/api/sync/', '/api/deploy/push')) or path in ('/api/drafts/get', '/api/drafts/all_tags')
+    if managed and cloud_content.status().get('enabled') and request.method != 'OPTIONS':
+        async with cloud_requests:
+            try:
+                if request.method in ('POST', 'PUT', 'DELETE') and path not in ('/api/drafts/get',):
+                    await run_in_threadpool(cloud_content.require_revision, request.headers.get('X-YunYue-Revision'))
+                else:
+                    await run_in_threadpool(cloud_content.refresh)
+                response = await call_next(request)
+            except (RuntimeError, OSError) as error:
+                response = JSONResponse({'ok': False, 'error': {'code': 'cloud_sync_required', 'message': str(error)}}, status_code=409)
+    else:
+        response = await call_next(request)
+    revision = cloud_content.status().get('revision')
+    if revision:
+        response.headers['X-YunYue-Revision'] = revision
+    return response
+
+@app.get('/api/cloud/status')
+def cloud_status():
+    return {'ok': True, 'data': cloud_content.status()}
+
+@app.get('/api/cloud/refresh')
+def cloud_refresh():
+    try:
+        return {'ok': True, 'data': cloud_content.refresh()}
+    except (RuntimeError, OSError) as error:
+        return JSONResponse({'ok': False, 'error': {'message': str(error)}}, status_code=409)
+
+@app.post('/api/cloud/connect')
+def cloud_connect():
+    try:
+        return {'ok': True, 'data': cloud_content.refresh(force=True, connect=True)}
+    except (RuntimeError, OSError) as error:
+        return JSONResponse({'ok': False, 'error': {'message': str(error)}}, status_code=409)
 
 
 @app.on_event("startup")
@@ -39,3 +76,13 @@ app.include_router(deploy.router, prefix="/api/deploy", tags=["Deploy"])
 app.include_router(deploy.jobs_router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(settings_v2.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
+    allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):\d+$",
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-YunYue-Revision"],
+    expose_headers=["X-YunYue-Revision"],
+)

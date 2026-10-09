@@ -9,6 +9,10 @@ type Cloud = { projectName: string; baseUrl: string; fastModel: string; deepMode
 type Job = { jobId: string; status: string; message: string; url?: string };
 const defaults: Config = { provider: 'deepseek', baseUrl: 'https://api.deepseek.com', fastModel: 'deepseek-flash', deepModel: 'deepseek-v4-pro', apiKeyConfigured: false, saved: false };
 const modelChoices = ['deepseek-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'];
+const modelLabels: Record<string, string> = {
+  'deepseek-flash': 'DeepSeek V4.1 Flash（deepseek-flash）',
+  'deepseek-v4-pro': 'DeepSeek V4 Pro（deepseek-v4-pro）',
+};
 
 export default function RobinSettings() {
   const [config, setConfig] = useState(defaults);
@@ -88,7 +92,7 @@ export default function RobinSettings() {
         setCustomModels(current => ({ ...current, [field]: custom }));
         if (!custom) update({ [field]: event.target.value });
       }}>
-        {Array.from(new Set([...modelChoices, cloud?.fastModel, cloud?.deepModel, config[field]].filter(Boolean))).map(value => <option key={value} value={value}>{value}</option>)}
+        {Array.from(new Set([...modelChoices, cloud?.fastModel, cloud?.deepModel, config[field]].filter(Boolean))).map(value => <option key={value} value={value}>{modelLabels[value!] || value}</option>)}
         <option value="__custom__">自定义模型…</option>
       </select>
       {customModels[field] && <><label className="sr-only" htmlFor={`${field}-custom`}>{label}的自定义模型名称</label><input id={`${field}-custom`} disabled={busy} value={config[field]} maxLength={200} onChange={event => update({ [field]: event.target.value })} placeholder="填写服务商提供的完整模型 ID" /></>}

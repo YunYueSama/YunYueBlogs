@@ -156,3 +156,5 @@ Windows 桌面进程使用 Job 对象约束自己的子孙进程。正常关闭�
 环境变量同步后重建最新就绪的服务器正式部署，不发布本机内容；任务在 `/api/jobs/{id}` 查看，仅部署 READY 才显示完成。失败可能已写入部分变量，页面会明确提示检查并重试。恢复时在此处填回原接口和模型并重新同步；需要恢复密钥时重新填写原密钥。模型名称必须由服务商实际支持，模型调用沿用博客的快速/深入思考两个入口及现有 Robin 角色设定。
 
 新接口：`GET/POST /api/robin/config`（本机配置）、`GET /api/robin/cloud`（服务器状态，不含密钥）、`POST /api/robin/sync`（同步并部署）。服务只监听本机回环地址，不开放为公网管理 API。
+
+模型显示名称与请求 ID 分开：DeepSeek 官方文档当前将 `deepseek-flash` 对应到 DeepSeek V4.1 Flash，因此下拉显示「DeepSeek V4.1 Flash（deepseek-flash）」，保存和调用仍使用 `deepseek-flash`。无需新增未经官方确认的 `deepseek-4.1-flash` 模型 ID。版本对应依据：[DeepSeek 模型与价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)（2026-10-09 核对）；服务商更新版本映射时同步调整显示名称。

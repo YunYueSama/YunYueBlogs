@@ -13,7 +13,6 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 
-from cms_core.api.picbed import validate_public_url
 from cms_core.api.deploy import ok, fail
 from cms_core.api.sync import validate_blog_path
 from cms_core.workspace import CONFIG_ROOT, JOBS_ROOT, ensure_workspace, read_json, write_json_atomic
@@ -23,20 +22,11 @@ sync_lock = threading.Lock()
 
 
 class RobinConfig(BaseModel):
-    provider: Literal['deepseek', 'compatible'] = 'deepseek'
-    baseUrl: str = Field(default='https://api.deepseek.com', max_length=2048)
-    fastModel: str = Field(default='deepseek-flash', min_length=1, max_length=200, pattern=r'^[A-Za-z0-9][A-Za-z0-9_./:-]*$')
-    deepModel: str = Field(default='deepseek-v4-pro', min_length=1, max_length=200, pattern=r'^[A-Za-z0-9][A-Za-z0-9_./:-]*$')
-
-    @field_validator('baseUrl')
-    @classmethod
-    def validate_base(cls, value):
-        value = validate_public_url(value.strip()).rstrip('/')
-        from urllib.parse import urlparse
-        url = urlparse(value)
-        if url.scheme != 'https' or url.query or url.fragment:
-            raise ValueError('AI 接口须使用无查询参数的 HTTPS 地址。')
-        return value
+    # 兼容旧配置文件，但不再接受修改服务或模型。
+    provider: Literal['deepseek'] = 'deepseek'
+    baseUrl: Literal['https://api.deepseek.com'] = 'https://api.deepseek.com'
+    fastModel: Literal['deepseek-flash'] = 'deepseek-flash'
+    deepModel: Literal['deepseek-flash'] = 'deepseek-flash'
 
 
 class RobinUpdate(RobinConfig):
@@ -51,7 +41,7 @@ class RobinUpdate(RobinConfig):
 
 
 def local_config():
-    return RobinConfig.model_validate(read_json(CONFIG_ROOT / 'robin.json', {}))
+    return RobinConfig()
 
 
 @router.get('/config')
@@ -64,12 +54,7 @@ def get_config():
 def save_config(payload: RobinUpdate):
     ensure_workspace()
     config = RobinConfig.model_validate(payload.model_dump())
-    if config.provider == 'deepseek' and config.baseUrl != 'https://api.deepseek.com':
-        return fail('invalid_provider', 'DeepSeek 请使用官方接口地址，其他接口请选择兼容服务。')
     secrets = read_json(CONFIG_ROOT / 'secrets.json', {})
-    if local_config().baseUrl != config.baseUrl and payload.apiKey is None:
-        # 换服务时不能悄悄把上一家服务的密钥发送到新地址。
-        return fail('new_key_required', '更换接口地址时请填写新服务的密钥。')
     if payload.apiKey is not None:
         if payload.apiKey:
             secrets['robinApiKey'] = payload.apiKey
@@ -111,25 +96,12 @@ def cli(path: Path, linked: dict, args: list[str], *, value: str | None = None, 
 def cloud_config(path, linked):
     envs = json.loads(cli(path, linked, ['api', f"/v9/projects/{linked['projectId']}/env", '--raw'])).get('envs', [])
     envs = {env['key']: env for env in envs if 'production' in env.get('target', [])}
-    def public_value(key, default):
-        env = envs.get(key, {})
-        value = env.get('value')
-        # 列表中的 encrypted value 是密文；仅解密三个公开参数，绝不读取 API Key。
-        if env.get('type') == 'encrypted':
-            env_id = env.get('id', '')
-            if not isinstance(env_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', env_id):
-                return default
-            result = json.loads(cli(path, linked, ['api', f"/v1/projects/{linked['projectId']}/env/{env_id}", '--raw']))
-            value = result.get('value') if result.get('key') == key else None
-        elif env.get('type') == 'sensitive':
-            return default
-        return value if isinstance(value, str) and value else default
     return {
         'projectName': linked['projectName'],
         'apiKeyConfigured': bool(envs.get('ROBIN_AI_API_KEY') or envs.get('DEEPSEEK_API_KEY')),
-        'baseUrl': public_value('ROBIN_AI_BASE_URL', 'https://api.deepseek.com'),
-        'fastModel': public_value('ROBIN_AI_FAST_MODEL', 'deepseek-flash'),
-        'deepModel': public_value('ROBIN_AI_DEEP_MODEL', 'deepseek-v4-pro'),
+        'baseUrl': 'https://api.deepseek.com',
+        'fastModel': 'deepseek-flash',
+        'deepModel': 'deepseek-flash',
     }
 
 
@@ -154,8 +126,6 @@ def synchronize(background_tasks: BackgroundTasks):
         cloud = cloud_config(path, linked)
         if not key and not cloud['apiKeyConfigured']:
             raise RuntimeError('请先保存 Robin API Key，再同步到服务器。')
-        if not key and config.baseUrl != cloud['baseUrl']:
-            raise RuntimeError('更换服务器接口地址时，请先保存新服务的密钥。')
         job_id = uuid.uuid4().hex
         write_json_atomic(JOBS_ROOT / f'{job_id}.json', {'jobId': job_id, 'status': 'queued', 'message': '等待同步 Robin 配置。'})
         background_tasks.add_task(run_sync, job_id, path, linked, config, key)
@@ -171,7 +141,7 @@ def run_sync(job_id, path, linked, config, key):
         write_json_atomic(JOBS_ROOT / f'{job_id}.json', job)
     try:
         report()
-        values = {'ROBIN_AI_BASE_URL': config.baseUrl, 'ROBIN_AI_FAST_MODEL': config.fastModel, 'ROBIN_AI_DEEP_MODEL': config.deepModel}
+        values = {}
         if key:
             values['ROBIN_AI_API_KEY'] = key
         for name, value in values.items():

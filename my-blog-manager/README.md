@@ -149,12 +149,7 @@ Windows 桌面进程使用 Job 对象约束自己的子孙进程。正常关闭�
 
 ## Robin 服务与模型配置
 
-“集成 → Robin AI 助手”替代旧 Gemini 密钥输入，独立于图床、Bangumi 和 Giscus 的保存操作。支持 DeepSeek 和 OpenAI 兼容接口，快速回答、深入思考各自指定完整模型 ID。模型使用固定选项下拉，展开显示全部候选及服务器当前模型，不按输入内容过滤；选择“自定义模型”后显示完整模型 ID 输入框。配置写入 `workspace/config/robin.json`，密钥只写入被忽略的 `secrets.json`，API 仅返回是否已配置；留空保留，清除操作只影响本机密钥。
+“集成 → Robin AI 助手”只配置 DeepSeek API Key。模型固定为 DeepSeek-V4.1-Flash（官方 API ID：`deepseek-flash`），接口固定为 `https://api.deepseek.com`。快速/深入模式、服务选择、自定义模型均已移除；旧本机模型配置、服务器模型环境变量和浏览器偏好不能启用 Pro。
 
-“同步到 Vercel 并部署”使用已登录的本机 Vercel CLI 和发布页博客路径对应的 `.vercel/project.json`。仅同步 Production 的 `ROBIN_AI_BASE_URL`、`ROBIN_AI_FAST_MODEL`、`ROBIN_AI_DEEP_MODEL`；保存了新密钥时才写入 `ROBIN_AI_API_KEY`。已有 `DEEPSEEK_API_KEY` 或 Robin 密钥可直接保留，不拉取、不回显服务器密钥。切换服务地址须提供新密钥，避免把旧服务凭据交给新接口。
+密钥只写入被忽略的 `workspace/config/secrets.json`，API 仅返回是否已配置；留空保留，清除只影响本机密钥。“同步到 Vercel 并部署”仅在填写新密钥时更新 Production 的 `ROBIN_AI_API_KEY`，已有服务器密钥不拉取、不回显。随后重建最新就绪的服务器正式部署，不发布本机内容；任务在 `/api/jobs/{id}` 查看，仅部署 READY 才显示完成。失败可能已写入密钥，需检查 Vercel 状态后重试。密钥恢复需重新填写原密钥。
 
-环境变量同步后重建最新就绪的服务器正式部署，不发布本机内容；任务在 `/api/jobs/{id}` 查看，仅部署 READY 才显示完成。失败可能已写入部分变量，页面会明确提示检查并重试。恢复时在此处填回原接口和模型并重新同步；需要恢复密钥时重新填写原密钥。模型名称必须由服务商实际支持，模型调用沿用博客的快速/深入思考两个入口及现有 Robin 角色设定。
-
-新接口：`GET/POST /api/robin/config`（本机配置）、`GET /api/robin/cloud`（服务器状态，不含密钥）、`POST /api/robin/sync`（同步并部署）。服务只监听本机回环地址，不开放为公网管理 API。
-
-模型显示名称与请求 ID 分开：DeepSeek 官方文档当前将 `deepseek-flash` 对应到 DeepSeek V4.1 Flash，因此下拉显示「DeepSeek V4.1 Flash（deepseek-flash）」，保存和调用仍使用 `deepseek-flash`。无需新增未经官方确认的 `deepseek-4.1-flash` 模型 ID。版本对应依据：[DeepSeek 模型与价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)（2026-10-09 核对）；服务商更新版本映射时同步调整显示名称。

@@ -22,21 +22,21 @@ def data(response):
 
 def test_keys_are_write_only_and_blank_preserves_existing(storage):
     robin.save_config(robin.RobinUpdate(apiKey='private-fixture'))
-    response = robin.save_config(robin.RobinUpdate(fastModel='custom/model-v2'))
+    response = robin.save_config(robin.RobinUpdate())
     assert 'private-fixture' not in response.body.decode()
     assert data(response)['data']['apiKeyConfigured'] is True
-    assert data(response)['data']['fastModel'] == 'custom/model-v2'
+    assert data(response)['data']['fastModel'] == 'deepseek-flash'
     assert json.loads((storage / 'secrets.json').read_text(encoding='utf-8'))['robinApiKey'] == 'private-fixture'
     robin.save_config(robin.RobinUpdate(apiKey=''))
     assert data(robin.get_config())['data']['apiKeyConfigured'] is False
 
 
-def test_switching_provider_requires_a_new_key(storage):
-    robin.save_config(robin.RobinUpdate(apiKey='old-secret'))
-    response = robin.save_config(robin.RobinUpdate(provider='compatible', baseUrl='https://new.example/v1'))
-    assert response.status_code == 400
-    assert json.loads((storage / 'secrets.json').read_text(encoding='utf-8'))['robinApiKey'] == 'old-secret'
-    assert data(robin.get_config())['data']['baseUrl'] == 'https://api.deepseek.com'
+def test_old_local_model_configuration_is_ignored(storage):
+    (storage / 'robin.json').write_text(json.dumps({'fastModel': 'deepseek-v4-pro', 'deepModel': 'deepseek-v4-pro', 'baseUrl': 'https://other.example'}))
+    assert robin.local_config().fastModel == 'deepseek-flash'
+    assert robin.local_config().deepModel == 'deepseek-flash'
+    with pytest.raises(ValidationError):
+        robin.RobinUpdate(deepModel='deepseek-v4-pro')
 
 
 @pytest.mark.parametrize('url', ['http://example.com', 'https://127.0.0.1', 'https://user:pass@example.com', 'https://example.com?token=x'])
@@ -50,11 +50,11 @@ def test_cloud_status_exposes_only_config_and_key_presence(monkeypatch):
     monkeypatch.setattr(robin, 'cli', lambda *a, **kw: json.dumps({'envs': envs}))
     result = robin.cloud_config(Path('.'), {'projectName': 'blog', 'projectId': 'prj_test'})
     assert result['apiKeyConfigured'] is True
-    assert result['fastModel'] == 'custom-model'
+    assert result['fastModel'] == 'deepseek-flash'
     assert 'secret' not in json.dumps(result)
 
 
-def test_encrypted_model_is_decrypted_but_secret_is_not(monkeypatch):
+def test_old_encrypted_model_is_ignored_without_decrypting_values(monkeypatch):
     calls = []
     def command(path, linked, args):
         calls.append(args)
@@ -66,9 +66,9 @@ def test_encrypted_model_is_decrypted_but_secret_is_not(monkeypatch):
         return json.dumps({'key': 'ROBIN_AI_FAST_MODEL', 'value': 'actual-model'})
     monkeypatch.setattr(robin, 'cli', command)
     result = robin.cloud_config(Path('.'), {'projectName': 'blog', 'projectId': 'prj_test'})
-    assert result['fastModel'] == 'actual-model'
+    assert result['fastModel'] == 'deepseek-flash'
     assert result['apiKeyConfigured'] is True
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert all('env_secret' not in args[1] for args in calls)
     assert 'ciphertext' not in json.dumps(result)
 
@@ -77,7 +77,7 @@ def test_sync_failure_never_leaks_key_or_starts_deployment(storage, monkeypatch)
     calls = []
     def command(path, linked, args, **kwargs):
         calls.append(args)
-        if args[0] == 'env' and args[2] == 'ROBIN_AI_FAST_MODEL':
+        if args[0] == 'env' and args[2] == 'ROBIN_AI_API_KEY':
             raise RuntimeError('CLI echoed private-fixture')
         return ''
     monkeypatch.setattr(robin, 'cli', command)
@@ -108,7 +108,7 @@ def test_sync_reuses_server_key_and_uses_latest_server_deployment(storage, monke
     assert robin.synchronize(tasks).status_code == 202
     task = tasks.tasks[0]
     task.func(*task.args, **task.kwargs)
-    assert not any('ROBIN_AI_API_KEY' in args for args, _ in calls)
+    assert not any(args[0] == 'env' for args, _ in calls)
     assert any(args[:2] == ['redeploy', 'blog-current.vercel.app'] for args, _ in calls)
     assert 'private-fixture' not in json.dumps(calls)
     job = json.loads(next(storage.glob('*.json')).read_text(encoding='utf-8'))

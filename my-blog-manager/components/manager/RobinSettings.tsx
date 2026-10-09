@@ -21,6 +21,7 @@ export default function RobinSettings() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState(false);
   const [deployment, setDeployment] = useState('');
+  const [customModels, setCustomModels] = useState({ fastModel: false, deepModel: false });
   const mounted = useRef(true);
   const edited = useRef(false);
 
@@ -82,9 +83,16 @@ export default function RobinSettings() {
   const model = (field: 'fastModel' | 'deepModel', label: string) => (
     <div className="form-field">
       <label htmlFor={field}>{label}</label>
-      <input id={field} disabled={busy} list={`robin-${field}-models`} value={config[field]} maxLength={200} onChange={event => update({ [field]: event.target.value })} placeholder="选择或填写完整模型名称" />
-      <datalist id={`robin-${field}-models`}>{Array.from(new Set([...modelChoices, cloud?.[field]].filter(Boolean))).map(value => <option key={value} value={value} />)}</datalist>
-      <small>可选推荐模型，也可填写服务商提供的模型 ID。</small>
+      <select id={field} disabled={busy} value={customModels[field] ? '__custom__' : config[field]} onChange={event => {
+        const custom = event.target.value === '__custom__';
+        setCustomModels(current => ({ ...current, [field]: custom }));
+        if (!custom) update({ [field]: event.target.value });
+      }}>
+        {Array.from(new Set([...modelChoices, cloud?.fastModel, cloud?.deepModel, config[field]].filter(Boolean))).map(value => <option key={value} value={value}>{value}</option>)}
+        <option value="__custom__">自定义模型…</option>
+      </select>
+      {customModels[field] && <><label className="sr-only" htmlFor={`${field}-custom`}>{label}的自定义模型名称</label><input id={`${field}-custom`} disabled={busy} value={config[field]} maxLength={200} onChange={event => update({ [field]: event.target.value })} placeholder="填写服务商提供的完整模型 ID" /></>}
+      <small>展开可选择其他模型；未列出的模型请选择“自定义模型”。</small>
     </div>
   );
   return <section className="console-panel integration-feature">

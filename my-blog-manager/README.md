@@ -149,7 +149,7 @@ Windows 桌面进程使用 Job 对象约束自己的子孙进程。正常关闭�
 
 ## Robin 服务与模型配置
 
-“集成 → Robin AI 助手”替代旧 Gemini 密钥输入，独立于图床、Bangumi 和 Giscus 的保存操作。支持 DeepSeek 和 OpenAI 兼容接口，快速回答、深入思考各自指定完整模型 ID（下拉建议支持自定义名称）。配置写入 `workspace/config/robin.json`，密钥只写入被忽略的 `secrets.json`，API 仅返回是否已配置；留空保留，清除操作只影响本机密钥。
+“集成 → Robin AI 助手”替代旧 Gemini 密钥输入，独立于图床、Bangumi 和 Giscus 的保存操作。支持 DeepSeek 和 OpenAI 兼容接口，快速回答、深入思考各自指定完整模型 ID。模型使用固定选项下拉，展开显示全部候选及服务器当前模型，不按输入内容过滤；选择“自定义模型”后显示完整模型 ID 输入框。配置写入 `workspace/config/robin.json`，密钥只写入被忽略的 `secrets.json`，API 仅返回是否已配置；留空保留，清除操作只影响本机密钥。
 
 “同步到 Vercel 并部署”使用已登录的本机 Vercel CLI 和发布页博客路径对应的 `.vercel/project.json`。仅同步 Production 的 `ROBIN_AI_BASE_URL`、`ROBIN_AI_FAST_MODEL`、`ROBIN_AI_DEEP_MODEL`；保存了新密钥时才写入 `ROBIN_AI_API_KEY`。已有 `DEEPSEEK_API_KEY` 或 Robin 密钥可直接保留，不拉取、不回显服务器密钥。切换服务地址须提供新密钥，避免把旧服务凭据交给新接口。
 

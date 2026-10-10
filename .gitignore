@@ -67,3 +67,14 @@ Thumbs.db
 /home-introduction.png
 .pytest_cache/
 *.tsbuildinfo
+
+# 私有诊断信息与临时文件；正式图片放 public 或 .github/readme
+*.har
+*.log
+*.key
+*.p12
+*.pfx
+.venv/
+venv/
+
+/picture/

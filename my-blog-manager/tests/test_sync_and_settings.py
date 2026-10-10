@@ -465,7 +465,6 @@ def test_integration_secrets_are_never_returned(tmp_path: Path, monkeypatch: pyt
 
     response = settings_v2.save_integrations(settings_v2.IntegrationUpdate(
         bangumiUsername="yunyue",
-        giscus=settings_v2.GiscusConfig(),
         picBedUrl="https://images.example.invalid/upload",
         picBedName="私有图床",
         picBedToken="pic-secret",
@@ -475,6 +474,8 @@ def test_integration_secrets_are_never_returned(tmp_path: Path, monkeypatch: pyt
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "pic-secret" not in serialized
     assert "ai-secret" not in serialized
+    assert "giscus" not in payload
+    assert "giscus" not in json.loads((data_root / "site.json").read_text(encoding="utf-8"))
     assert payload["picBedTokenConfigured"] is True
     assert payload["geminiApiKeyConfigured"] is True
     assert hashlib.sha256(b"pic-secret").hexdigest() not in serialized

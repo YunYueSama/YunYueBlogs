@@ -9,7 +9,7 @@ import { MediaField } from './MediaPicker';
 type SiteConfig = {
   title: string; shortTitle: string; author: string; bio: string; description: string; avatar: string; favicon: string; homeHero: string; defaultCover: string; siteUrl: string; buildDate: string;
   social: { github: string; email: string }; musicIds: string[]; musicTracks: Array<{ key: string; source: 'netease' | 'kugou'; id: string }>; danmaku: string[]; bangumiUsername: string;
-  giscus: { repo: string; repoId: string; category: string; categoryId: string }; icp: { name: string; url: string };
+  icp: { name: string; url: string };
 };
 
 export default function AppearanceForm() {

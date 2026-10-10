@@ -31,13 +31,6 @@ class SocialConfig(BaseModel):
     email: str = ""
 
 
-class GiscusConfig(BaseModel):
-    repo: str = Field(default="", max_length=200, pattern=r"^$|^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-    repoId: str = Field(default="", max_length=200)
-    category: str = Field(default="Announcements", max_length=100)
-    categoryId: str = Field(default="", max_length=200)
-
-
 class IcpConfig(BaseModel):
     name: str = ""
     url: str = ""
@@ -88,7 +81,6 @@ class PublicSiteConfig(BaseModel):
     musicTracks: list[MusicTrackReference] = Field(default_factory=list)
     danmaku: list[str] = Field(default_factory=list)
     bangumiUsername: str = Field(default="", max_length=100)
-    giscus: GiscusConfig
     icp: IcpConfig
 
     @field_validator("buildDate")
@@ -146,7 +138,6 @@ class LyricOffsetUpdate(BaseModel):
 
 class IntegrationUpdate(BaseModel):
     bangumiUsername: str = Field(default="", max_length=100)
-    giscus: GiscusConfig
     picBedUrl: str = Field(default="", max_length=2048)
     picBedName: str = Field(default="", max_length=100)
     picBedToken: str | None = Field(default=None, max_length=4096)
@@ -328,7 +319,6 @@ def get_integrations():
     integration = read_json(CONFIG_ROOT / "integrations.json", {})
     return ok({
         "bangumiUsername": site.get("bangumiUsername", ""),
-        "giscus": site.get("giscus", GiscusConfig().model_dump()),
         "picBedUrl": integration.get("picBedUrl", ""),
         "picBedName": integration.get("picBedName", ""),
         "picBedTokenConfigured": bool(secrets.get("picBedToken")),
@@ -343,7 +333,7 @@ def save_integrations(payload: IntegrationUpdate):
     if not site:
         return fail("settings_missing", "公开站点配置尚未初始化。", 404)
     site["bangumiUsername"] = payload.bangumiUsername.strip()
-    site["giscus"] = payload.giscus.model_dump()
+    site.pop("giscus", None)  # 兼容旧工作区，保存时清除已停用的评论配置。
     write_json_atomic(DATA_ROOT / "site.json", site)
     write_json_atomic(CONFIG_ROOT / "integrations.json", {"picBedUrl": payload.picBedUrl.strip(), "picBedName": payload.picBedName.strip()})
 

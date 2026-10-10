@@ -8,7 +8,6 @@ import { managerApi } from '../../lib/managerApi';
 
 type Integrations = {
   bangumiUsername: string;
-  giscus: { repo: string; repoId: string; category: string; categoryId: string };
   picBedUrl: string;
   picBedName: string;
   picBedTokenConfigured: boolean;
@@ -17,7 +16,6 @@ type Integrations = {
 
 const empty: Integrations = {
   bangumiUsername: '',
-  giscus: { repo: '', repoId: '', category: 'Announcements', categoryId: '' },
   picBedUrl: '',
   picBedName: '',
   picBedTokenConfigured: false,
@@ -48,7 +46,6 @@ export default function IntegrationForm() {
     try {
       const payload = {
         bangumiUsername: data.bangumiUsername,
-        giscus: data.giscus,
         picBedUrl: data.picBedUrl,
         picBedName: data.picBedName,
         ...(clearPicBedToken ? { picBedToken: '' } : picBedToken ? { picBedToken } : {}),
@@ -60,7 +57,7 @@ export default function IntegrationForm() {
       setData(saved);
       setPicBedToken('');
       setClearPicBedToken(false);
-      setStatus({ message: '已保存到管理端工作区。Bangumi 与 Giscus 等公开配置需前往“发布”生成差异并同步；密钥只写入本机忽略目录。' });
+      setStatus({ message: '已保存到管理端工作区。Bangumi 等公开配置需前往“发布”生成差异并同步；密钥只写入本机忽略目录。' });
     } catch (error) {
       setStatus({ error: true, message: error instanceof Error ? error.message : '保存失败' });
     } finally {
@@ -99,18 +96,6 @@ export default function IntegrationForm() {
         <div className="integration-test-row">
           <p><CloudUpload size={15} /> 保存只更新管理端工作区；同步后本地博客生效，推送后 GitHub 与 Vercel 生效。</p>
           <Link className="console-action secondary" href="/publish"><CloudUpload size={16} />前往发布</Link>
-        </div>
-      </section>
-
-      <section className="console-panel">
-        <header>
-          <div><h2>Giscus 评论</h2><span>使用 GitHub Discussions，不再使用 Gitalk clientSecret 与 OAuth 代理</span></div>
-        </header>
-        <div className="form-grid">
-          <div className="form-field"><label htmlFor="giscusRepo">仓库（owner/repo）</label><input id="giscusRepo" value={data.giscus.repo} onChange={(event) => setData({ ...data, giscus: { ...data.giscus, repo: event.target.value } })} /></div>
-          <div className="form-field"><label htmlFor="repoId">Repository ID</label><input id="repoId" value={data.giscus.repoId} onChange={(event) => setData({ ...data, giscus: { ...data.giscus, repoId: event.target.value } })} /></div>
-          <div className="form-field"><label htmlFor="category">Discussion 分类</label><input id="category" value={data.giscus.category} onChange={(event) => setData({ ...data, giscus: { ...data.giscus, category: event.target.value } })} /></div>
-          <div className="form-field"><label htmlFor="categoryId">Category ID</label><input id="categoryId" value={data.giscus.categoryId} onChange={(event) => setData({ ...data, giscus: { ...data.giscus, categoryId: event.target.value } })} /></div>
         </div>
       </section>
 

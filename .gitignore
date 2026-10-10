@@ -53,3 +53,17 @@ $null
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 本地验证截图、测试缓存和旧构建
+/*-preview.png
+/*-production.png
+/*-refined.png
+/lyrics-follow-return.png
+/player-centered-pip.png
+/footer-rounded*.png
+/draggable-player.png
+/bookmarks-only.png
+/hero-shift-left.png
+/home-introduction.png
+.pytest_cache/
+*.tsbuildinfo

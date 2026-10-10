@@ -440,9 +440,12 @@ a { color: inherit; text-decoration: none; }
   .music-candidate-actions .console-icon { width:30px;min-width:30px;height:34px; }
   .music-resource-copy small { white-space:normal; }
 }
-.music-private-preview { position:fixed;z-index:90;right:24px;bottom:24px;width:min(480px,calc(100vw - 32px));display:grid;gap:12px;padding:18px;border:1px solid var(--console-line);border-radius:14px;background:var(--console-panel);box-shadow:0 12px 48px #1113; }
-.music-preview-heading { display:flex;align-items:center;gap:8px;min-width:0; }
+.music-private-preview { position:fixed;z-index:90;right:24px;bottom:24px;width:min(340px,calc(100vw - 32px));display:grid;gap:8px;padding:12px;border:1px solid var(--console-line);border-radius:16px;background:var(--console-panel);box-shadow:0 8px 32px #1113; }
+.music-preview-heading { display:flex;align-items:center;gap:8px;min-width:0;cursor:grab;touch-action:none;user-select:none; }
+.music-preview-heading:active { cursor:grabbing; }
+.music-preview-heading .console-icon { width:28px;height:28px;min-height:28px; }
 .music-preview-heading strong { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px; }
 .music-private-preview p { display:flex;align-items:flex-start;gap:8px;margin:0;font-size:13px;line-height:1.7; }
 .music-private-preview audio { width:100%; }
+.music-private-preview .music-preview-status-ready { display:none; }
 @media(max-width:640px) { .music-private-preview { right:16px;bottom:16px; } }

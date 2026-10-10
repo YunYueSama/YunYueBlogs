@@ -27,6 +27,22 @@ export default function MusicAccounts({ preview, onClosePreview }: { preview?: {
   const [audioTrack, setAudioTrack] = useState('');
   const [previewState, setPreviewState] = useState<{ loading: boolean; message: string }>({ loading: false, message: '' });
   const audioRef = useRef<HTMLAudioElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null);
+  const movePreview = useCallback((x: number, y: number) => {
+    const rect = previewRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPosition({ x: Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)), y: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)) });
+  }, []);
+  useEffect(() => {
+    const clamp = () => {
+      const rect = previewRef.current?.getBoundingClientRect();
+      if (rect) movePreview(rect.left, rect.top);
+    };
+    window.addEventListener('resize', clamp);
+    return () => window.removeEventListener('resize', clamp);
+  }, [movePreview]);
   const generation = useRef(0);
   const alive = useRef(true);
   const refresh = useCallback(async () => {
@@ -137,7 +153,16 @@ export default function MusicAccounts({ preview, onClosePreview }: { preview?: {
       <small>只向对应音乐平台发送手机号和验证码，凭据加密保存在本机。若平台要求安全验证，请在官方手机端完成。</small>
     </form>}
     {message && <p className="console-note" role="status">{message}</p>}
-    {preview && <div className="music-private-preview" role="region" aria-label="本机账号播放"><div className="music-preview-heading"><MusicSourceIcon source={preview.source} size={24} /><strong>本机播放 · {preview.name || previewName || preview.id}</strong><button className="console-icon" type="button" aria-label="关闭播放" onClick={onClosePreview}><X size={18} /></button></div><p role="status">{previewState.loading ? <LoaderCircle size={16} className="animate-spin" /> : null}{previewState.message}</p>{audio && audioTrack === `${preview.source}:${preview.id}` && <audio ref={audioRef} controls src={audio} preload="metadata" onError={() => { setAudio(''); setPreviewState({ loading: false, message: '音源已失效或连接失败，请再次点击歌曲旁的音符按钮重试。' }); }} />}</div>}
+    {preview && <div ref={previewRef} className="music-private-preview" role="region" aria-label="本机账号播放" style={position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : undefined}><div className="music-preview-heading" title="拖动标题移动播放器" onPointerDown={(event) => {
+      if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+      const rect = previewRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }} onPointerMove={(event) => {
+      const start = drag.current;
+      if (start?.id === event.pointerId) movePreview(start.left + event.clientX - start.x, start.top + event.clientY - start.y);
+    }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}><MusicSourceIcon source={preview.source} size={24} /><strong>本机播放 · {preview.name || previewName || preview.id}</strong><button className="console-icon" type="button" aria-label="关闭播放" onClick={onClosePreview}><X size={18} /></button></div><p role="status" className={audio ? 'music-preview-status-ready' : undefined}>{previewState.loading ? <LoaderCircle size={16} className="animate-spin" /> : null}{previewState.message}</p>{audio && audioTrack === `${preview.source}:${preview.id}` && <audio ref={audioRef} controls src={audio} preload="metadata" onError={() => { setAudio(''); setPreviewState({ loading: false, message: '音源已失效或连接失败，请再次点击歌曲旁的音符按钮重试。' }); }} />}</div>}
     <p className="console-note">本机账号用于试听；公开博客可单独配置 Vercel 服务端账号。会员歌曲能否完整播放取决于该账号的有效权益。退出本机账号不会删除 Vercel 中的凭据。每日福利遵守平台领取资格，必要时请在官方 App 完成操作。</p>
   </section>;
 }

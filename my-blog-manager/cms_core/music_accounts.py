@@ -278,11 +278,9 @@ def private_playback(source: str, track_id: str, *, album_id: str = '', album_au
     account = state().get(source, {})
     if not account.get('cookie'):
         raise ValueError('请先登录对应的音乐账号，可选择扫码或手机号登录')
-    params = {'id': track_id, 'level': 'standard'} if source == 'netease' else {'hash': track_id, 'quality': '128', 'free_part': False, 'album_id': album_id or '0', 'album_audio_id': album_audio_id or '0'}
+    # 本机预览以所选文件 Hash 为唯一依据，兼容旧歌单中误存的 Audioid。
+    params = {'id': track_id, 'level': 'standard'} if source == 'netease' else {'hash': track_id, 'quality': '128', 'free_part': False, 'album_id': '0', 'album_audio_id': '0'}
     result = gateway(source, 'song_url_v1' if source == 'netease' else 'song_url', params, account['cookie'])['body']
-    if source == 'kugou' and result.get('error_code') == 35104 and (album_id or album_audio_id):
-        # 搜索目录的 Audioid 不一定是播放目录标识；仅在明确 Hash not found 时回退原 Hash。
-        result = gateway(source, 'song_url', {**params, 'album_id': '0', 'album_audio_id': '0'}, account['cookie'])['body']
     if source == 'netease':
         row = (result.get('data') or [{}])[0]
         if row.get('freeTrialInfo'):

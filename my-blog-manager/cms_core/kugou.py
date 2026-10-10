@@ -92,7 +92,8 @@ def search_songs(keyword: str, limit: int = 8) -> list[dict[str, Any]]:
             "album": str(song.get("AlbumName") or "")[:200],
             "cover": image.replace("{size}", "400").replace("http://", "https://")[:2048],
             "albumId": str(song.get("AlbumID") or "")[:40],
-            "albumAudioId": str(song.get("Audioid") or song.get("MixSongID") or "")[:40],
+            # 播放接口需要专辑曲目 MixSongID；Audioid 是另一套编号，可能指向其他歌曲。
+            "albumAudioId": str(song.get("MixSongID") or "")[:40],
             "duration": int(song.get("Duration") or 0),
         })
     _cache_set(cache_key, {"items": items}, 1800)

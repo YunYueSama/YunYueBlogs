@@ -139,15 +139,16 @@ def test_trial_is_not_complete_audio(local_account, monkeypatch):
         accounts.private_playback('netease', '501660')
 
 
-def test_kugou_preview_passes_catalog_ids_and_cookie(local_account, monkeypatch):
+def test_kugou_preview_ignores_stale_catalog_ids_and_passes_cookie(local_account, monkeypatch):
     calls = []
     def gateway(source, action, params, cookie):
         calls.append((source, action, params, cookie))
         return {'body': {'data': {'url': ['https://example.org/full.mp3']}}}
     monkeypatch.setattr(accounts, 'gateway', gateway)
     assert accounts.private_playback('kugou', 'A' * 32, album_id='123', album_audio_id='456')['url'].endswith('/full.mp3')
-    assert calls[0][2]['album_id'] == '123'
-    assert calls[0][2]['album_audio_id'] == '456'
+    assert calls[0][2]['album_id'] == '0'
+    assert calls[0][2]['album_audio_id'] == '0'
+    assert calls[0][2]['hash'] == 'A' * 32
     assert calls[0][3]['token'] == 'private-test-token'
 
 
@@ -157,15 +158,16 @@ def test_kugou_preview_rejects_trial(local_account, monkeypatch):
         accounts.private_playback('kugou', 'A' * 32)
 
 
-def test_kugou_catalog_mismatch_retries_hash_without_catalog_ids(local_account, monkeypatch):
+def test_kugou_catalog_mismatch_cannot_select_other_song(local_account, monkeypatch):
     calls = []
     def gateway(source, action, params, cookie):
         calls.append(params)
-        return {'body': {'error_code': 35104}} if len(calls) == 1 else {'body': {'url': ['https://example.org/full.mp3']}}
+        assert params['album_audio_id'] == '0'
+        return {'body': {'url': ['https://example.org/full.mp3']}}
     monkeypatch.setattr(accounts, 'gateway', gateway)
     assert accounts.private_playback('kugou', 'A' * 32, album_audio_id='456')['url'].endswith('/full.mp3')
-    assert calls[1]['album_audio_id'] == '0'
-    assert calls[1]['hash'] == calls[0]['hash']
+    assert len(calls) == 1
+    assert calls[0]['hash'] == 'A' * 32
 
 
 def test_windows_storage_is_protected(local_account):

@@ -219,8 +219,8 @@ export default function MusicManager() {
       setReferences((current) => [...current, checked]);
       setTracks((current) => ({ ...current, [key]: result }));
       setOffsetDrafts((current) => ({ ...current, [key]: '0' }));
-      setCandidateTracks([]);
-      setCandidate('');
+      // 保留搜索词和其余结果，连续添加时只移除已加入的歌曲。
+      setCandidateTracks((current) => current.filter((item) => referenceKey(item) !== key));
       setStatus({ message: result.track.playbackAvailable === false
         ? `《${result.track.name}》已加入待保存歌单；当前未获取完整音源，可点击音符使用本机账号播放。`
         : result.track.lyric?.wordTimed

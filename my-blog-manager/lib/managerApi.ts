@@ -18,7 +18,7 @@ function contentResource(path: string) {
 
 export function getApiBase() {
   if (!cachedBase) {
-    cachedBase = fetch('/backend_config.json', { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+    cachedBase = fetch('/api/runtime', { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
       .then(async (response) => response.ok ? response.json() : Promise.reject(new Error('无法读取后端端口配置')))
       .then((config: { api_port?: number }) => {
         if (!Number.isInteger(config.api_port) || config.api_port! < 1 || config.api_port! > 65535) throw new Error('后端端口配置无效，请重启控制台');

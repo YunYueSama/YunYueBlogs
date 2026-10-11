@@ -1,0 +1,65 @@
+name: Windows manager release
+on:
+  push:
+    tags: ['manager-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '安装包版本'
+        required: true
+        default: '2.1.0'
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build dependencies
+        run: |
+          python -m pip install -r my-blog-manager/requirements.txt pyinstaller==6.16.0 pytest
+          npm.cmd ci --prefix my-blog-manager --no-audit --no-fund
+      - name: Install verified Inno Setup compiler
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_4_2/innosetup-6.4.2.exe' -OutFile $installer
+          if ((Get-AuthenticodeSignature $installer).Status -ne 'Valid') { throw 'Inno Setup signature invalid' }
+          $folder = Join-Path $env:RUNNER_TEMP 'Inno'
+          $process = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$folder") -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
+          "ISCC_PATH=$folder\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Tests
+        working-directory: my-blog-manager
+        run: |
+          python -m pytest -q
+          npm.cmd run test:client
+      - name: Build isolated Windows installer
+        shell: pwsh
+        env:
+          MANAGER_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:MANAGER_VERSION
+          if (!$version) { $version = $env:RELEASE_TAG.Replace('manager-v', '') }
+          python my-blog-manager/scripts/build-windows.py --version $version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: .release/windows/artifacts/*
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/manager-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $assets = @(Get-ChildItem .release/windows/artifacts -File | ForEach-Object FullName)
+          gh release create $env:RELEASE_TAG @assets --verify-tag --title "星辉云端 Windows 管理端 $env:RELEASE_TAG" --notes-file my-blog-manager/docs/windows-release.md

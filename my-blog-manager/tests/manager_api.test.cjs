@@ -31,7 +31,7 @@ test('拒绝越界端口，避免使用无效的本地服务地址', async () =>
 
 test('保留 Headers 对象中的调用方请求头', async () => {
   const api = load(async (url, init) => {
-    if (url === '/backend_config.json') return Response.json({ api_port: 8000 });
+    if (url === '/api/runtime') return Response.json({ api_port: 8000 });
     assert.equal(init.headers.get('x-check'), 'retained');
     assert.equal(init.headers.get('content-type'), 'application/json');
     return Response.json({ ok: true, data: { saved: true } });
@@ -41,7 +41,7 @@ test('保留 Headers 对象中的调用方请求头', async () => {
 });
 
 test('非标准成功响应不能被误认为保存成功', async () => {
-  const api = load(async (url) => url === '/backend_config.json'
+  const api = load(async (url) => url === '/api/runtime'
     ? Response.json({ api_port: 8000 }) : Response.json({ unexpected: true }));
   await assert.rejects(api.managerApi('/api/test'), /数据格式异常/);
 });
@@ -50,7 +50,7 @@ test('账号请求不受内容版本变化影响，其他页面刷新不升级�
   let revision = 'old';
   const writes = [];
   const api = load(async (url, init) => {
-    if (url === '/backend_config.json') return Response.json({ api_port: 8000 });
+    if (url === '/api/runtime') return Response.json({ api_port: 8000 });
     if (init.method === 'POST') {
       writes.push(init.headers.get('X-YunYue-Revision'));
       return Response.json({ ok: false, error: { message: '其他设备更新' } }, { status: 409 });
@@ -71,7 +71,7 @@ test('并发读取倒序返回时不能用旧结果覆盖新的编辑基线', as
   let release;
   let count = 0;
   const api = load(async (url) => {
-    if (url === '/backend_config.json') return Response.json({ api_port: 8000 });
+    if (url === '/api/runtime') return Response.json({ api_port: 8000 });
     if (++count === 1) await new Promise(resolve => { release = resolve; });
     return Response.json({ ok: true, data: {} }, { headers: { 'X-YunYue-Revision': count === 1 ? 'old' : 'new' } });
   });

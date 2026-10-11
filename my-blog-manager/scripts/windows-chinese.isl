@@ -1,0 +1,29 @@
+[LangOptions]
+LanguageName=简体中文
+LanguageID=$0804
+LanguageCodePage=0
+[Messages]
+SetupAppTitle=安装程序
+SetupWindowTitle=安装 — %1
+ButtonBack=< 上一步(&B)
+ButtonNext=下一步(&N) >
+ButtonInstall=安装(&I)
+ButtonOK=确定
+ButtonCancel=取消
+ButtonFinish=完成(&F)
+ButtonBrowse=浏览(&B)...
+WelcomeLabel1=欢迎使用 [name] 安装向导
+WelcomeLabel2=此向导将在你的电脑上安装 [name/ver]。%n%n运行环境随安装包提供，首次启动后可连接已有博客或创建自己的博客。
+WizardSelectDir=选择安装位置
+SelectDirDesc=你希望将 [name] 安装在哪里？
+SelectDirLabel3=程序将安装到下列文件夹。个人文章、草稿与账号配置保存在独立的用户工作区。
+WizardSelectTasks=选择附加任务
+SelectTasksDesc=你希望执行哪些附加任务？
+WizardReady=准备安装
+ReadyLabel1=安装程序已准备好在你的电脑上安装 [name]。
+WizardInstalling=正在安装
+InstallingLabel=正在安装 [name]，请稍候。
+FinishedHeadingLabel=[name] 安装完成
+FinishedLabelNoIcons=安装程序已在你的电脑上安装 [name]。
+FinishedLabel=安装程序已在你的电脑上安装 [name]，可通过快捷方式打开。
+ClickFinish=点击“完成”退出安装向导。

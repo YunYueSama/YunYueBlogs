@@ -4,7 +4,21 @@ import os
 # 🌟 路径定位逻辑
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
-    EXE_DIR = os.path.dirname(sys.executable)
+    EXE_DIR = os.path.join(os.environ['LOCALAPPDATA'], 'YunYueManager')
+    os.makedirs(EXE_DIR, exist_ok=True)
+    os.environ['YUNYUE_MANAGER_ROOT'] = EXE_DIR
+    os.environ['YUNYUE_PACKAGED'] = '1'
+    os.environ['GH_CONFIG_DIR'] = os.path.join(EXE_DIR, 'workspace', 'config', 'github')
+    os.environ['PATH'] = os.pathsep.join([
+        os.path.join(BASE_DIR, 'runtime', 'node'),
+        os.path.join(BASE_DIR, 'runtime', 'git', 'cmd'),
+        os.path.join(BASE_DIR, 'runtime', 'gh', 'bin'),
+        os.environ.get('PATH', ''),
+    ])
+    # Windows 无控制台程序的 stdout/stderr 为 None；日志与 Uvicorn 都需要可写流。
+    log_dir = os.path.join(EXE_DIR, 'workspace', 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    sys.stdout = sys.stderr = open(os.path.join(log_dir, 'desktop.log'), 'a', encoding='utf-8', buffering=1)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     EXE_DIR = BASE_DIR
@@ -55,13 +69,13 @@ def get_free_port():
 
 def write_port_config(port):
     # 写入解压目录供前端读取
-    public_dir = os.path.join(BASE_DIR, 'public')
+    public_dir = os.path.join(EXE_DIR, 'public')
     os.makedirs(public_dir, exist_ok=True)
     with open(os.path.join(public_dir, 'backend_config.json'), 'w', encoding='utf-8') as f:
         json.dump({"api_port": port}, f)
 
     standalone_public = str(FRONTEND_BUILD / 'standalone/public')
-    if (FRONTEND_BUILD / 'standalone').exists():
+    if not getattr(sys, 'frozen', False) and (FRONTEND_BUILD / 'standalone').exists():
         os.makedirs(standalone_public, exist_ok=True)
         with open(os.path.join(standalone_public, 'backend_config.json'), 'w', encoding='utf-8') as f:
             json.dump({"api_port": port}, f)
@@ -159,6 +173,7 @@ if __name__ == "__main__":
 
     env_vars = os.environ.copy()
     env_vars["PORT"] = str(frontend_port)
+    os.environ['YUNYUE_FRONTEND_ORIGIN'] = f'http://127.0.0.1:{frontend_port}'
 
     standalone_dir = str(FRONTEND_BUILD / 'standalone')
     server_js = os.path.join(standalone_dir, 'server.js')
@@ -166,12 +181,16 @@ if __name__ == "__main__":
     # 🌟 核心自适应逻辑：判断是“打包运行”还是“开发运行”
     if os.path.exists(server_js):
         print("🚀 [生产模式] 使用 127.0.0.1 强制同步...")
-        prepare_standalone_assets()
+        if not getattr(sys, 'frozen', False):
+            prepare_standalone_assets()
         env_vars["HOSTNAME"] = "127.0.0.1"
         env_vars["YUNYUE_MANAGER_ROOT"] = EXE_DIR
         frontend_process = subprocess.Popen(["node", "server.js"], cwd=standalone_dir, env=env_vars,
                                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        window_url = f"http://127.0.0.1:{frontend_port}"
+        from cms_core.workspace import read_json
+        connected = read_json(CONFIG_ROOT / 'onboarding.json', {}).get('completed')
+        first_install = getattr(sys, 'frozen', False) and not connected
+        window_url = f"http://127.0.0.1:{frontend_port}" + ('/setup' if first_install else '')
     else:
         print("🛠️ [开发模式] 使用 localhost 保持兼容...")
         frontend_process = subprocess.Popen("npm run dev", shell=True, cwd=BASE_DIR, env=env_vars,
@@ -185,6 +204,13 @@ if __name__ == "__main__":
     if not wait_for_port(backend_port) or not wait_for_port(frontend_port):
         print(">>> ❌ 前后端启动失败！")
         on_closed(1)
+
+    # 自动验收只启动本实例的服务，不弹出窗口，也不读写其他用户的工作区。
+    from cms_core.workspace import write_json_atomic
+    write_json_atomic(CONFIG_ROOT / 'desktop-runtime.json', {'frontendPort': frontend_port, 'backendPort': backend_port})
+    if '--smoke-test' in sys.argv:
+        time.sleep(120)
+        on_closed()
 
     api = WindowAPI()
     window = webview.create_window(

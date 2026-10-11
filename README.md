@@ -27,6 +27,10 @@
 
 ## 从第一次启动到第一次发布
 
+Windows 用户也可以使用 [安装包](https://github.com/YunYueSama/YunYueBlogs/releases/latest)。安装版自带运行环境，首次打开后通过 GitHub 官方授权，选择“连接已有博客”或“创建自己的博客”。连接现有仓库会继续使用原来的 Vercel 项目；新建博客会创建自己的私有仓库，再由你在 Vercel 导入上线。安装包不包含作者的工作区、草稿、登录文件和密钥。
+
+安装版的个人数据保存在 `%LOCALAPPDATA%\YunYueManager\workspace`，程序更新和卸载会保留此目录。换设备时重新授权账号；未发布草稿仍需单独迁移。详细说明见 [Windows 安装与发布说明](my-blog-manager/docs/windows-release.md)。下面保留源码安装流程。
+
 **管理端在自己的 Windows 电脑运行，公开博客部署到 Vercel。** 推荐先让博客上线，再连接管理端；下面各步骤可以单独展开。博客首次上线的图文介绍见[博客 README](https://github.com/YunYueSama/YunYueBlog#想自己搭一个也欢迎)。
 
 <details>

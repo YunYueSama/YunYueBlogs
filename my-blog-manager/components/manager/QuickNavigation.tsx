@@ -6,6 +6,7 @@ import { useNavigationGuard } from '../../context/NavigationGuardContext';
 import { Search, X, ArrowUpRight } from 'lucide-react';
 
 const destinations = [
+  { href: '/setup', label: '连接博客', description: '新设备首次连接与创建博客', keywords: '安装 向导 GitHub' },
   { href: '/editor', label: '新建文章', description: '记录新的想法', keywords: '写作 新建' },
   { href: '/drafts', label: '草稿箱', description: '继续未完成的写作', keywords: '草稿' },
   { href: '/content', label: '内容库', description: '搜索文章与杂谈', keywords: '文章 搜索' },

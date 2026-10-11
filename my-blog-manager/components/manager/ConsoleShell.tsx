@@ -26,6 +26,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const isActive = (item: typeof navigation[number]) => item.aliases.some((alias) => pathname.startsWith(alias));
   const active = navigation.find(isActive) ?? navigation[0];
 
+  if (pathname === '/setup') return <main className="setup-shell">{children}</main>;
+
   return (
     <div className="console-shell">
       <aside className={`console-sidebar ${open ? 'is-open' : ''}`}>

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-MANAGER_ROOT = Path(__file__).resolve().parent.parent
+MANAGER_ROOT = Path(os.environ.get('YUNYUE_MANAGER_ROOT') or Path(__file__).resolve().parent.parent).resolve()
 WORKSPACE_ROOT = MANAGER_ROOT / "workspace"
 CONTENT_ROOT = WORKSPACE_ROOT / "content"
 DATA_ROOT = WORKSPACE_ROOT / "data"
@@ -36,6 +36,9 @@ def import_legacy_content() -> dict[str, Any]:
     """Idempotently imports existing local content without deleting the source."""
     ensure_workspace()
     copied: list[str] = []
+    # 安装版只读取当前用户的数据目录，不导入安装目录或作者的旧工作区。
+    if os.environ.get('YUNYUE_PACKAGED') == '1':
+        return {"copied": [], "counts": workspace_counts()}
     if read_json(CONFIG_ROOT / 'cloud-content.json', {}).get('enabled'):
         return {"copied": [], "counts": workspace_counts()}
 

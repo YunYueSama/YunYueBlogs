@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, music_accounts, operations, picbed, projects, settings_v2, sync, robin
+from cms_core.api import config, deploy, drafts, friends, gallery, moments, music, music_accounts, operations, picbed, projects, settings_v2, sync, robin, onboarding
 from cms_core.workspace import import_legacy_content, workspace_counts
 import asyncio
+import os
 from starlette.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from cms_core import cloud_content
@@ -14,6 +15,10 @@ app = FastAPI(title="星辉云端控制台 API", version="2.0.0", max_request_si
 
 @app.middleware('http')
 async def synchronize_cloud_content(request, call_next):
+    origin = request.headers.get('origin')
+    expected = os.environ.get('YUNYUE_FRONTEND_ORIGIN')
+    if expected and origin and origin != expected:
+        return JSONResponse({'ok': False, 'error': {'message': '请从当前管理窗口操作。'}}, status_code=403)
     path = request.url.path
     managed = (path.startswith(('/api/settings', '/api/gallery', '/api/projects', '/api/friends', '/api/moments', '/api/operations', '/api/sync/', '/api/deploy/push')) or path in ('/api/drafts/get', '/api/drafts/all_tags')) and path != '/api/settings/integrations'
     if managed and cloud_content.status().get('enabled') and request.method != 'OPTIONS':
@@ -92,6 +97,7 @@ app.include_router(deploy.jobs_router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(settings_v2.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(robin.router, prefix="/api/robin", tags=["Robin"])
 app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
+app.include_router(onboarding.router, prefix='/api/onboarding', tags=['Onboarding'])
 
 app.add_middleware(
     CORSMiddleware,

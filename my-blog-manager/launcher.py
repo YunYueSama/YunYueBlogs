@@ -31,6 +31,7 @@ import socket
 import json
 import subprocess
 import traceback
+from urllib.parse import urlsplit
 from desktop_runtime import claim_instance, sync_assets, contain_process_tree
 from frontend_runtime import active_build_dir
 from cms_core.main import app
@@ -173,7 +174,6 @@ if __name__ == "__main__":
 
     env_vars = os.environ.copy()
     env_vars["PORT"] = str(frontend_port)
-    os.environ['YUNYUE_FRONTEND_ORIGIN'] = f'http://127.0.0.1:{frontend_port}'
 
     standalone_dir = str(FRONTEND_BUILD / 'standalone')
     server_js = os.path.join(standalone_dir, 'server.js')
@@ -197,6 +197,9 @@ if __name__ == "__main__":
                                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         window_url = f"http://localhost:{frontend_port}"
 
+    # 源码开发使用 localhost，安装版使用 127.0.0.1；按实际窗口地址校验来源。
+    window_origin = urlsplit(window_url)
+    os.environ['YUNYUE_FRONTEND_ORIGIN'] = f'{window_origin.scheme}://{window_origin.netloc}'
     write_port_config(backend_port)
     api_thread = threading.Thread(target=run_api, args=(backend_port,), daemon=True)
     api_thread.start()

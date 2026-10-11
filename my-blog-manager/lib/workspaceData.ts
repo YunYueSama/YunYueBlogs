@@ -13,9 +13,9 @@ const prepareWorkspace = cache(async () => {
   await connection();
   const port = JSON.parse(fs.readFileSync(path.join(/*turbopackIgnore: true*/ managerRoot, 'public/backend_config.json'), 'utf8')).api_port;
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('后台连接配置无效，请重启控制台');
-  const response = await fetch(`http://127.0.0.1:${port}/api/cloud/refresh`, { cache: 'no-store', signal: AbortSignal.timeout(60_000) });
+  const response = await fetch(`http://127.0.0.1:${port}/api/cloud/snapshot`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
   const result = await response.json();
-  if (!response.ok || !result.ok) throw new Error(result.error?.message || '无法同步服务器内容，请稍后重试');
+  if (!response.ok || !result.ok) throw new Error(result.error?.message || '无法读取本地内容，请检查管理端服务');
 });
 
 const contentPaths = {

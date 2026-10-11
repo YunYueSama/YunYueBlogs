@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { managerApi } from '../../lib/managerApi';
 import { MediaField } from './MediaPicker';
+import AppearancePreview from './AppearancePreview';
 
 type SiteConfig = {
   title: string; shortTitle: string; author: string; bio: string; description: string; avatar: string; favicon: string; homeHero: string; defaultCover: string; siteUrl: string; buildDate: string;
@@ -40,13 +41,14 @@ export default function AppearanceForm() {
       <div className="form-field full"><label htmlFor="bio">个人简介</label><textarea id="bio" maxLength={500} value={data.bio} onChange={(event) => update('bio', event.target.value)} /></div>
     </div></section>
     <section className="console-panel"><header><div><h2>媒体与氛围</h2><span>公开 URL 和轻量弹幕；图床密钥不在这里保存</span></div></header><div className="form-grid">
-      <MediaField label="作者头像" value={data.avatar} onChange={(value) => update('avatar', value)} description="用于关于页、友链名片和默认作者身份。" />
-      <MediaField label="网页图标" value={data.favicon} onChange={(value) => update('favicon', value)} description="建议使用正方形 PNG、WebP 或 ICO。" />
-      <MediaField label="首页主视觉" value={data.homeHero} onChange={(value) => update('homeHero', value)} description="首屏 LCP 资源优先使用公开仓库中的本地路径。" />
-      <MediaField label="默认文章封面" value={data.defaultCover} onChange={(value) => update('defaultCover', value)} description="文章未设置独立封面时使用。" />
+      <MediaField label="作者头像" value={data.avatar} siteUrl={data.siteUrl} onChange={(value) => update('avatar', value)} description="用于关于页、友链名片和默认作者身份。" />
+      <MediaField label="网页图标" value={data.favicon} siteUrl={data.siteUrl} onChange={(value) => update('favicon', value)} description="建议使用正方形 PNG、WebP 或 ICO。" />
+      <MediaField label="首页主视觉" value={data.homeHero} siteUrl={data.siteUrl} onChange={(value) => update('homeHero', value)} description="首屏大图优先使用公开仓库中的本地路径。" />
+      <MediaField label="默认文章封面" value={data.defaultCover} siteUrl={data.siteUrl} onChange={(value) => update('defaultCover', value)} description="文章未设置独立封面时使用。" />
       <div className="form-field full"><span>音乐播放列表</span><div className="integration-summary"><strong>{data.musicTracks?.length || data.musicIds.length} 首歌曲已配置</strong><span>酷狗 + 网易云双源查询、逐字歌词和排序已迁移到独立音乐资源页。</span></div><div><Link className="console-action secondary" href="/music">管理音乐资源</Link></div></div>
       <div className="form-field full"><label htmlFor="danmaku">首页弹幕</label><textarea id="danmaku" value={data.danmaku.join('\n')} onChange={(event) => update('danmaku', event.target.value.split('\n').map((item) => item.trim()).filter(Boolean))} /><small>每行一条；移动端和减少动画模式不会显示。</small></div>
     </div></section>
+    <AppearancePreview title={data.shortTitle} bio={data.bio} siteUrl={data.siteUrl} />
     {status && <div className={`form-status ${status.error ? 'error' : ''}`} role={status.error ? 'alert' : 'status'}>{status.message}</div>}
     <div><button className="console-action" type="submit" disabled={saving}>{saving ? <LoaderCircle className="animate-spin" size={16} /> : <Save size={16} />}保存外观配置</button></div>
   </form>;

@@ -1,8 +1,8 @@
 'use client';
 
 import { AlertTriangle, X } from 'lucide-react';
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalDialog } from '../../lib/useModalDialog';
 
 export function ConsoleDialog({ open, eyebrow, title, onClose, busy = false, children, footer, wide = false }: {
   open: boolean;
@@ -14,28 +14,16 @@ export function ConsoleDialog({ open, eyebrow, title, onClose, busy = false, chi
   footer: React.ReactNode;
   wide?: boolean;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onClose();
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [busy, onClose, open]);
+  const dialog = useModalDialog(open);
 
   if (!open) return null;
-  return createPortal(<div className="console-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-    <section className={`console-dialog ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="console-dialog-title">
+  return createPortal(<dialog ref={dialog} className="console-native-dialog" aria-labelledby="console-dialog-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <section className={`console-dialog ${wide ? 'wide' : ''}`}>
       <header><div><span>{eyebrow}</span><h2 id="console-dialog-title">{title}</h2></div><button className="console-icon" type="button" onClick={onClose} disabled={busy} aria-label="关闭"><X size={18} /></button></header>
       <div className="console-dialog-content">{children}</div>
       <footer>{footer}</footer>
     </section>
-  </div>, document.body);
+  </dialog>, document.body);
 }
 
 export function ConfirmDialog({ open, title, description, onClose, onConfirm, busy = false, confirmLabel = '确认删除' }: {

@@ -15,6 +15,15 @@ export type ImageAsset = {
 
 export type MediaPage = { items: ImageAsset[]; total: number };
 
+export function publicMediaPreview(value: string, siteUrl = '') {
+  const clean = value.trim();
+  if (!clean || clean.startsWith('//')) return '';
+  try {
+    const resolved = new URL(clean, siteUrl || undefined);
+    return /^https?:$/.test(resolved.protocol) && !resolved.username && !resolved.password ? resolved.href : '';
+  } catch { return ''; }
+}
+
 export async function imageDimensions(file: File) {
   try {
     const bitmap = await createImageBitmap(file);
@@ -44,8 +53,10 @@ export async function uploadImage(file: File, alt = '') {
   return managerApi<ImageAsset>('/api/picbed/upload', { method: 'POST', body });
 }
 
-export function loadMedia(query = '') {
-  return managerApi<MediaPage>(`/api/picbed/assets?query=${encodeURIComponent(query)}&limit=120`);
+export const MEDIA_PAGE_SIZE = 24;
+
+export function loadMedia(query = '', offset = 0, signal?: AbortSignal) {
+  return managerApi<MediaPage>(`/api/picbed/assets?query=${encodeURIComponent(query)}&offset=${Math.max(0, offset)}&limit=${MEDIA_PAGE_SIZE}`, { signal });
 }
 
 export function registerExternalImage(url: string, alt = '') {

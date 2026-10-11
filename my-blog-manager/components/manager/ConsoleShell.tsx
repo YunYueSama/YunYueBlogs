@@ -1,7 +1,7 @@
 'use client';
 
 import { AppWindow, Boxes, ChevronRight, CloudUpload, FileText, Gauge, Image, Images, Link2, Menu, Music2, Palette, PanelsTopLeft, Plug, X } from 'lucide-react';
-import Link from 'next/link';
+import Link from './GuardedLink';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import OperationQueue from './OperationQueue';

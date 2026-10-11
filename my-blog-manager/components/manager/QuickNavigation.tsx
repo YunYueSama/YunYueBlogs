@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useNavigationGuard } from '../../context/NavigationGuardContext';
 import { Search, X, ArrowUpRight } from 'lucide-react';
 
 const destinations = [
@@ -21,6 +22,7 @@ const destinations = [
 
 export default function QuickNavigation() {
   const router = useRouter();
+  const { navigate: guardedNavigate } = useNavigationGuard();
   const dialog = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState('');
   const matches = destinations.filter((item) => `${item.label} ${item.description} ${item.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -34,7 +36,7 @@ export default function QuickNavigation() {
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
   }, []);
-  const navigate = (href: string) => { dialog.current?.close(); router.push(href); };
+  const navigate = (href: string) => { dialog.current?.close(); guardedNavigate(() => router.push(href)); };
   return <>
     <button className="console-action secondary quick-nav-trigger" onClick={() => { setQuery(''); dialog.current?.showModal(); }} aria-label="打开快捷导航" title="快捷导航（Ctrl+K）"><Search size={16} /><span>快速前往</span><kbd>Ctrl K</kbd></button>
     <dialog ref={dialog} className="quick-nav-dialog" onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }}>

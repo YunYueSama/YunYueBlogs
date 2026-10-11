@@ -449,3 +449,13 @@ a { color: inherit; text-decoration: none; }
 .music-private-preview audio { width:100%; }
 .music-private-preview .music-preview-status-ready { display:none; }
 @media(max-width:640px) { .music-private-preview { right:16px;bottom:16px; } }
+
+/* 原生 dialog 提供焦点边界、背景隔离与关闭后的焦点恢复。 */
+.console-native-dialog { margin: auto; padding: 0; border: 0; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); background: transparent; color: var(--console-ink); overflow: visible; }
+.console-native-dialog::backdrop { background: rgb(15 18 20 / 58%); backdrop-filter: blur(5px); }
+.console-native-dialog .console-dialog { max-width: calc(100vw - 24px); }
+.media-native-dialog { width: min(920px, calc(100vw - 24px)); }
+.media-native-dialog .media-dialog { width: 100%; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; }
+.media-native-dialog .media-picker-grid { flex: 1; min-height: 120px; }
+.media-pagination { padding: 12px 18px; margin: 0; border-top: 1px solid var(--console-line); flex-shrink: 0; }
+@media (max-width: 640px) { .media-native-dialog { width: calc(100vw - 16px); max-width: calc(100vw - 16px); } .media-pagination { padding: 10px 12px; } }

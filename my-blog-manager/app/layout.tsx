@@ -4,6 +4,7 @@ import './globals.css';
 import ConsoleShell from '../components/manager/ConsoleShell';
 import { ToastProvider } from '../components/ToastProvider';
 import { OperationProvider } from '../context/OperationContext';
+import { NavigationGuardProvider } from '../context/NavigationGuardContext';
 import CloudContentStatus from '../components/manager/CloudContentStatus';
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body><OperationProvider><ToastProvider><ConsoleShell><CloudContentStatus />{children}</ConsoleShell></ToastProvider></OperationProvider></body>
+      <body><NavigationGuardProvider><OperationProvider><ToastProvider><ConsoleShell><CloudContentStatus />{children}</ConsoleShell></ToastProvider></OperationProvider></NavigationGuardProvider></body>
     </html>
   );
 }

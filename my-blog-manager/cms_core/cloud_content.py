@@ -12,13 +12,54 @@ from cms_core import workspace as ws
 
 LOCK = threading.RLock()
 _last_check = 0.0
+_probe_lock = threading.Lock()
+_last_probe = 0.0
+_checking = False
+_server_revision = None
+_check_error = ''
 
 def state_path():
     return ws.CONFIG_ROOT / 'cloud-content.json'
 
 def status():
     state = ws.read_json(state_path(), {})
-    return {key: state.get(key) for key in ('enabled', 'revision', 'checkedAt', 'backup', 'remote', 'branch')}
+    result = {key: state.get(key) for key in ('enabled', 'revision', 'checkedAt', 'backup', 'remote', 'branch')}
+    # revision 始终代表本地快照；探测出的远程版本不能成为旧表单的保存凭证。
+    result.update(checking=_checking, checkError=_check_error,
+                  updateAvailable=bool(state.get('enabled') and _server_revision and _server_revision != state.get('revision')))
+    return result
+
+
+def _probe_updates():
+    global _checking, _server_revision, _check_error, _last_probe
+    try:
+        # 与显式同步共用 Git 锁，但绝不合并或改写内容缓存。
+        with LOCK:
+            target, remote, branch = _settings()
+            _git(target, 'fetch', remote, branch)
+            revision = _git(target, 'rev-parse', f'refs/remotes/{remote}/{branch}').decode().strip()
+            if not re.fullmatch(r'[a-f0-9]{40,64}', revision):
+                raise RuntimeError('远程版本无效。')
+            _server_revision = revision
+            _check_error = ''
+    except (RuntimeError, OSError):
+        _check_error = '暂时无法检查服务器更新，当前仍可浏览最近同步的内容。'
+    finally:
+        with _probe_lock:
+            _last_probe = time.monotonic()
+            _checking = False
+
+
+def schedule_update_check():
+    """读取立即返回快照，后台仅探测；更新内容必须经显式同步或写入版本核验。"""
+    global _checking
+    if not status().get('enabled'):
+        return
+    with _probe_lock:
+        if _checking or time.monotonic() - _last_probe < 60:
+            return
+        _checking = True
+    threading.Thread(target=_probe_updates, name='cloud-update-check', daemon=True).start()
 
 def _git(target, *args, input=None):
     try:
@@ -101,7 +142,7 @@ def _backup():
     return str(directory)
 
 def refresh(force=False, connect=False):
-    global _last_check
+    global _last_check, _server_revision, _check_error
     with LOCK:
         state = ws.read_json(state_path(), {})
         if not connect and not state.get('enabled'):
@@ -111,6 +152,8 @@ def refresh(force=False, connect=False):
         target, remote, branch = _settings()
         known = state.get('revision') if not connect and state.get('remote') == remote and state.get('branch') == branch else None
         revision, remote_files = _remote(target, remote, branch, known)
+        _server_revision = revision
+        _check_error = ''
         if remote_files is None:
             # 服务器未变时不重写缓存，保留本机待发布编辑和文件时间戳。
             state['checkedAt'] = int(time.time())

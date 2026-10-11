@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:api": "python -m pytest -q",
-    "test:client": "node --test tests/manager_api.test.cjs tests/music_cover.test.cjs"
+    "test:client": "node --test tests/manager_api.test.cjs tests/music_cover.test.cjs tests/manager_workflows.test.cjs tests/music_check_queue.test.cjs"
   },
   "dependencies": {
     "@tiptap/extension-code-block-lowlight": "^3.23.4",

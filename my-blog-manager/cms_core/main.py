@@ -26,32 +26,43 @@ async def synchronize_cloud_content(request, call_next):
                 elif request.method in ('POST', 'PUT', 'DELETE') and path not in ('/api/drafts/get',):
                     await run_in_threadpool(cloud_content.require_revision, request.headers.get('X-YunYue-Revision'))
                 else:
-                    await run_in_threadpool(cloud_content.refresh)
+                    cloud_content.schedule_update_check()
                 response = await call_next(request)
+                revision = cloud_content.status().get('revision')
+                if revision:
+                    response.headers['X-YunYue-Revision'] = revision
             except (RuntimeError, OSError) as error:
                 response = JSONResponse({'ok': False, 'error': {'code': 'cloud_sync_required', 'message': str(error)}}, status_code=409)
     else:
         response = await call_next(request)
     revision = cloud_content.status().get('revision')
-    if revision:
+    if revision and 'X-YunYue-Revision' not in response.headers:
         response.headers['X-YunYue-Revision'] = revision
     return response
 
 @app.get('/api/cloud/status')
 def cloud_status():
+    cloud_content.schedule_update_check()
+    return {'ok': True, 'data': cloud_content.status()}
+
+@app.get('/api/cloud/snapshot')
+def cloud_snapshot():
+    cloud_content.schedule_update_check()
     return {'ok': True, 'data': cloud_content.status()}
 
 @app.get('/api/cloud/refresh')
-def cloud_refresh():
+async def cloud_refresh():
     try:
-        return {'ok': True, 'data': cloud_content.refresh()}
+        async with cloud_requests:
+            return {'ok': True, 'data': await run_in_threadpool(cloud_content.refresh, force=True)}
     except (RuntimeError, OSError) as error:
         return JSONResponse({'ok': False, 'error': {'message': str(error)}}, status_code=409)
 
 @app.post('/api/cloud/connect')
-def cloud_connect():
+async def cloud_connect():
     try:
-        return {'ok': True, 'data': cloud_content.refresh(force=True, connect=True)}
+        async with cloud_requests:
+            return {'ok': True, 'data': await run_in_threadpool(cloud_content.refresh, force=True, connect=True)}
     except (RuntimeError, OSError) as error:
         return JSONResponse({'ok': False, 'error': {'message': str(error)}}, status_code=409)
 

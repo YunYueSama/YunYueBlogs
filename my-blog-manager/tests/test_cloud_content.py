@@ -2,8 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 import pytest
-from cms_core import cloud_content as cloud, workspace as ws
-from cms_core.api import sync
+from cms_core import cloud_content as cloud, music_library, workspace as ws
+from cms_core.api import settings_v2, sync
 
 def git(root, *args):
     return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True).stdout.decode().strip()
@@ -39,7 +39,15 @@ def devices(tmp_path, monkeypatch):
         monkeypatch.setattr(module, 'DATA_ROOT', data)
     monkeypatch.setattr(ws, 'WORKSPACE_ROOT', root)
     monkeypatch.setattr(ws, 'CONFIG_ROOT', config)
+    for name in ('PLANS_ROOT', 'JOBS_ROOT', 'DRAFTS_ROOT'):
+        monkeypatch.setattr(ws, name, root / name.replace('_ROOT', '').lower())
+    for module in (settings_v2, music_library):
+        monkeypatch.setattr(module, 'DATA_ROOT', data)
     monkeypatch.setattr(cloud, '_last_check', 0)
+    monkeypatch.setattr(cloud, '_last_probe', 0)
+    monkeypatch.setattr(cloud, '_server_revision', None)
+    monkeypatch.setattr(cloud, '_check_error', '')
+    monkeypatch.setattr(cloud, 'schedule_update_check', lambda: None)
     monkeypatch.setattr(sync, 'ensure_workspace', lambda: root)
     return first, second, content, data
 
@@ -142,3 +150,42 @@ def test_local_queue_autosave_does_not_fetch_remote(devices, monkeypatch):
     with TestClient(app) as client:
         response = client.put('/api/operations', json={'operations': []})
     assert response.status_code == 200
+
+
+def test_read_snapshot_and_settings_remain_available_when_remote_is_offline(devices, monkeypatch):
+    from fastapi.testclient import TestClient
+    from cms_core.main import app
+    first, second, content, data = devices
+    revision = cloud.refresh(connect=True)['revision']
+    def offline(*args, **kwargs):
+        raise RuntimeError('模拟远程网络不可用')
+    monkeypatch.setattr(cloud, '_git', offline)
+    cloud._probe_updates()
+    with TestClient(app) as client:
+        snapshot = client.get('/api/cloud/snapshot')
+        settings = client.get('/api/settings/music')
+    assert snapshot.status_code == settings.status_code == 200
+    assert snapshot.json()['data']['revision'] == revision
+    assert snapshot.json()['data']['checkError']
+    assert settings.headers['X-YunYue-Revision'] == revision
+    assert settings.json()['data']['musicIds'] == ['1', '2']
+
+
+def test_background_probe_never_replaces_snapshot_or_its_revision(devices):
+    from fastapi.testclient import TestClient
+    from cms_core.main import app
+    first, second, content, data = devices
+    revision = cloud.refresh(connect=True)['revision']
+    publish(second, 'src/data/site.json', '{"musicIds":["other-device"]}')
+    cloud._probe_updates()
+    assert cloud.status()['updateAvailable'] is True
+    assert cloud.status()['revision'] == revision
+    assert json.loads((data / 'site.json').read_text())['musicIds'] == ['1', '2']
+    with TestClient(app) as client:
+        read = client.get('/api/settings/music')
+        write = client.post('/api/settings/music', json={'musicIds': ['stale']}, headers={'X-YunYue-Revision': revision})
+    assert read.headers['X-YunYue-Revision'] == revision
+    assert read.json()['data']['musicIds'] == ['1', '2']
+    assert write.status_code == 409
+    assert json.loads((data / 'site.json').read_text())['musicIds'] == ['other-device']
+    assert cloud.status()['updateAvailable'] is False

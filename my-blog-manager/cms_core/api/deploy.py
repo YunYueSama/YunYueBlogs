@@ -213,6 +213,18 @@ def get_job(job_id: str):
     return ok(job)
 
 
+@jobs_router.get("")
+def recent_jobs():
+    """恢复服务器保存的任务状态，不在浏览器持久化仓库路径或发布凭据。"""
+    files = sorted(JOBS_ROOT.glob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)[:10]
+    jobs = []
+    for path in files:
+        job = read_json(path, None)
+        if isinstance(job, dict) and job.get("jobId"):
+            jobs.append({key: job.get(key) for key in ("jobId", "status", "message", "createdAt", "finishedAt")})
+    return ok({"jobs": jobs})
+
+
 def _run_push(job_id: str, target: Path, payload: PushRequest, paths: list[str], snapshot: dict[str, str]) -> None:
     job_path = JOBS_ROOT / f"{job_id}.json"
     try:
@@ -231,9 +243,11 @@ def _run_push(job_id: str, target: Path, payload: PushRequest, paths: list[str],
         add = _git(target, ["add", "--", *paths])
         if add.returncode != 0:
             raise RuntimeError("Git 暂存失败：" + add.stderr.strip())
+        write_json_atomic(job_path, {**read_json(job_path, {}), "message": "已核验并暂存受管文件，正在创建提交。"})
         commit = _git(target, ["commit", "-m", payload.commitMessage])
         if commit.returncode != 0:
             raise RuntimeError("Git 提交失败：" + commit.stderr.strip())
+        write_json_atomic(job_path, {**read_json(job_path, {}), "message": "本地提交已创建，正在推送 GitHub。"})
         push_result = _git(target, ["push", payload.remote, f"HEAD:{payload.branch}"])
         if push_result.returncode != 0:
             raise RuntimeError("Git 推送失败：" + push_result.stderr.strip())

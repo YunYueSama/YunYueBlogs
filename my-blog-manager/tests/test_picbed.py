@@ -15,6 +15,19 @@ def response_json(response) -> dict:
     return json.loads(response.body.decode("utf-8"))
 
 
+def test_media_pagination_reaches_items_after_first_120(tmp_path: Path, monkeypatch) -> None:
+    _, data_root = configure(tmp_path, monkeypatch)
+    assets = [{"id": str(index), "url": f"https://images.example.invalid/{index}.png", "alt": "夜色"} for index in range(145)]
+    picbed.write_json_atomic(data_root / picbed.MEDIA_FILE, assets)
+    first = response_json(picbed.list_assets(query="夜色", offset=0, limit=24))["data"]
+    final = response_json(picbed.list_assets(query="夜色", offset=120, limit=24))["data"]
+    last = response_json(picbed.list_assets(query="夜色", offset=144, limit=24))["data"]
+    assert first["total"] == final["total"] == 145
+    assert len(first["items"]) == len(final["items"]) == 24
+    assert final["items"][0]["id"] == "120"
+    assert [item["id"] for item in last["items"]] == ["144"]
+
+
 def configure(tmp_path: Path, monkeypatch, *, token: str = "test-token") -> tuple[Path, Path]:
     config_root = tmp_path / "config"
     data_root = tmp_path / "data"

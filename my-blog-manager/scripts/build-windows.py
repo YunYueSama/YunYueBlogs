@@ -64,8 +64,11 @@ fs.writeFileSync(process.argv[2],'export const siteConfig = '+JSON.stringify(con
     command(['node', '-e', transformer, str(MANAGER / 'siteConfig.ts'), str(destination / 'siteConfig.ts')], cwd=MANAGER)
 
 def main():
+    # 英文 Windows 的重定向输出可能默认 CP1252，中文构建进度须明确使用 UTF-8。
+    if hasattr(os.sys.stdout, 'reconfigure'):
+        os.sys.stdout.reconfigure(encoding='utf-8')
     args = argparse.ArgumentParser()
-    args.add_argument('--version', default='2.1.0')
+    args.add_argument('--version', default='2.1.1')
     args.add_argument('--iscc', default=os.environ.get('ISCC_PATH', r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'))
     options = args.parse_args()
     if not re.fullmatch(r'\d+\.\d+\.\d+', options.version):
@@ -148,20 +151,23 @@ def audit_package(root):
 
 def copy_python_licenses(packaged):
     from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
     licenses = packaged / 'licenses/python'
     licenses.mkdir(parents=True, exist_ok=True)
     python_license = Path(os.sys.base_prefix) / 'LICENSE.txt'
     if not python_license.exists():
         raise RuntimeError('Python 运行时许可证缺失')
     shutil.copy2(python_license, licenses / 'Python-LICENSE.txt')
-    pending = [Requirement(line).name for line in (MANAGER / 'requirements.txt').read_text().splitlines() if line.strip()]
+    pending = [Requirement(line) for line in (MANAGER / 'requirements.txt').read_text().splitlines() if line.strip()]
     seen = set()
     notices = []
     while pending:
-        name = pending.pop()
-        if name.lower() in seen:
+        requested = pending.pop()
+        name = requested.name
+        identity = (canonicalize_name(name), tuple(sorted(requested.extras)))
+        if identity in seen:
             continue
-        seen.add(name.lower())
+        seen.add(identity)
         distribution = importlib.metadata.distribution(name)
         notices.append(f'{distribution.metadata["Name"]} {distribution.version}')
         for file in distribution.files or []:
@@ -171,9 +177,9 @@ def copy_python_licenses(packaged):
                 shutil.copy2(distribution.locate_file(file), target)
         for dependency in distribution.requires or []:
             requirement = Requirement(dependency)
-            if requirement.marker is None or requirement.marker.evaluate():
-                pending.append(requirement.name)
-    (licenses / 'PACKAGES.txt').write_text('\n'.join(sorted(notices)) + '\n', encoding='utf-8')
+            if requirement.marker is None or any(requirement.marker.evaluate({'extra': extra}) for extra in requested.extras or {''}):
+                pending.append(requirement)
+    (licenses / 'PACKAGES.txt').write_text('\n'.join(sorted(set(notices))) + '\n', encoding='utf-8')
 
 if __name__ == '__main__':
     main()

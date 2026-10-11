@@ -7,13 +7,16 @@ on:
       version:
         description: '安装包版本'
         required: true
-        default: '2.1.0'
+        default: '2.1.1'
 permissions:
   contents: write
 jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +28,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install -r my-blog-manager/requirements.txt pyinstaller==6.16.0 pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm.cmd ci --prefix my-blog-manager --no-audit --no-fund
       - name: Install verified Inno Setup compiler
         shell: pwsh
@@ -40,6 +44,7 @@ jobs:
         working-directory: my-blog-manager
         run: |
           python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm.cmd run test:client
       - name: Build isolated Windows installer
         shell: pwsh

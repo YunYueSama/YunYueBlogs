@@ -20,13 +20,21 @@ async def synchronize_cloud_content(request, call_next):
     if expected and origin and origin != expected:
         return JSONResponse({'ok': False, 'error': {'message': '请从当前管理窗口操作。'}}, status_code=403)
     path = request.url.path
-    managed = (path.startswith(('/api/settings', '/api/gallery', '/api/projects', '/api/friends', '/api/moments', '/api/operations', '/api/sync/', '/api/deploy/push')) or path in ('/api/drafts/get', '/api/drafts/all_tags')) and path != '/api/settings/integrations'
+    managed = path.startswith(('/api/settings', '/api/gallery', '/api/projects', '/api/friends', '/api/moments', '/api/operations', '/api/sync/', '/api/deploy/push')) or path in ('/api/drafts/get', '/api/drafts/all_tags')
+    local_integration_write = False
+    if path == '/api/settings/integrations' and request.method == 'POST':
+        # 图床与密钥仅存本机；只有显式修改公开用户名才需要核对远程版本。
+        try:
+            payload = await request.json()
+        except ValueError:
+            payload = None
+        local_integration_write = not isinstance(payload, dict) or 'bangumiUsername' not in payload
     if managed and cloud_content.status().get('enabled') and request.method != 'OPTIONS':
         async with cloud_requests:
             try:
-                if path == '/api/operations' and request.method == 'PUT':
-                    # 队列只保存在本机；实际应用时再严格校验每条操作版本。
-                    # 防抖自动保存不能每次都等待远程 fetch。
+                if local_integration_write or path == '/api/operations' and request.method == 'PUT':
+                    # 本机配置与队列保存不访问远程；仍串行读取响应快照，避免旧正文配上新版本号。
+                    # 队列实际应用时再严格校验每条操作版本。
                     pass
                 elif request.method in ('POST', 'PUT', 'DELETE') and path not in ('/api/drafts/get',):
                     await run_in_threadpool(cloud_content.require_revision, request.headers.get('X-YunYue-Revision'))

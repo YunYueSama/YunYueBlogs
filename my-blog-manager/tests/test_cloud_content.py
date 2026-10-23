@@ -189,3 +189,106 @@ def test_background_probe_never_replaces_snapshot_or_its_revision(devices):
     assert write.status_code == 409
     assert json.loads((data / 'site.json').read_text())['musicIds'] == ['other-device']
     assert cloud.status()['updateAvailable'] is False
+
+
+def test_integration_public_change_rejects_old_revision_before_private_writes(devices, monkeypatch):
+    from fastapi.testclient import TestClient
+    from cms_core.main import app
+    first, second, content, data = devices
+    revision = cloud.refresh(connect=True)['revision']
+    monkeypatch.setattr(settings_v2, 'CONFIG_ROOT', ws.CONFIG_ROOT)
+    publish(second, 'src/data/site.json', '{"musicIds":["1","2"],"bangumiUsername":"other-device"}')
+    with TestClient(app) as client:
+        response = client.post('/api/settings/integrations', json={
+            'bangumiUsername': 'stale-form', 'picBedName': 'must-not-save',
+        }, headers={'X-YunYue-Revision': revision})
+    assert response.status_code == 409
+    assert response.json()['error']['code'] == 'cloud_sync_required'
+    assert json.loads((data / 'site.json').read_text())['bangumiUsername'] == 'other-device'
+    assert not (ws.CONFIG_ROOT / 'integrations.json').exists()
+
+
+def test_integration_public_change_accepts_current_revision_and_explicit_clear(devices, monkeypatch):
+    from fastapi.testclient import TestClient
+    from cms_core.main import app
+    cloud.refresh(connect=True)
+    monkeypatch.setattr(settings_v2, 'CONFIG_ROOT', ws.CONFIG_ROOT)
+    with TestClient(app) as client:
+        read = client.get('/api/settings/integrations')
+        revision = read.headers['X-YunYue-Revision']
+        saved = client.post('/api/settings/integrations', json={'bangumiUsername': 'new-user'}, headers={'X-YunYue-Revision': revision})
+        cleared = client.post('/api/settings/integrations', json={'bangumiUsername': ''}, headers={'X-YunYue-Revision': revision})
+    assert saved.status_code == 200
+    assert saved.json()['data']['bangumiUsername'] == 'new-user'
+    assert cleared.status_code == 200
+    assert cleared.json()['data']['bangumiUsername'] == ''
+
+
+def test_private_integration_save_works_offline_without_rewriting_public_content(devices, monkeypatch):
+    from fastapi.testclient import TestClient
+    from cms_core.main import app
+    first, second, content, data = devices
+    cloud.refresh(connect=True)
+    monkeypatch.setattr(settings_v2, 'CONFIG_ROOT', ws.CONFIG_ROOT)
+    before = (data / 'site.json').read_bytes()
+    before_mtime = (data / 'site.json').stat().st_mtime_ns
+    def forbidden(*args, **kwargs):
+        raise AssertionError('本机图床配置不应访问远程或核验公开内容版本')
+    monkeypatch.setattr(cloud, 'require_revision', forbidden)
+    monkeypatch.setattr(cloud, '_git', forbidden)
+    with TestClient(app) as client:
+        response = client.post('/api/settings/integrations', json={
+            'picBedName': '本机图床', 'picBedUrl': 'https://images.example.invalid/upload',
+        }, headers={'X-YunYue-Revision': 'a' * 40})
+    assert response.status_code == 200
+    assert response.json()['data']['picBedName'] == '本机图床'
+    assert (data / 'site.json').read_bytes() == before
+    assert (data / 'site.json').stat().st_mtime_ns == before_mtime
+
+
+def test_private_integration_response_cannot_mix_old_content_with_new_revision(monkeypatch):
+    import asyncio
+    import threading
+    import httpx
+    from cms_core import main
+
+    state = {'revision': 'a' * 40, 'username': 'old-user'}
+    read_started, release_read, refresh_entered = threading.Event(), threading.Event(), threading.Event()
+
+    def read(path, default):
+        if path.name == 'site.json':
+            snapshot = {'title': 'demo', 'bangumiUsername': state['username']}
+            read_started.set()
+            assert release_read.wait(5)
+            return snapshot
+        return {}
+
+    def refresh(**kwargs):
+        refresh_entered.set()
+        state.update(revision='b' * 40, username='new-user')
+        return {'enabled': True, 'revision': state['revision']}
+
+    monkeypatch.setattr(cloud, 'status', lambda: {'enabled': True, 'revision': state['revision']})
+    monkeypatch.setattr(cloud, 'refresh', refresh)
+    monkeypatch.setattr(settings_v2, 'ensure_workspace', lambda: None)
+    monkeypatch.setattr(settings_v2, 'read_json', read)
+    monkeypatch.setattr(settings_v2, 'write_json_atomic', lambda *args: None)
+
+    async def concurrent_save_and_refresh():
+        monkeypatch.setattr(main, 'cloud_requests', asyncio.Lock())
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url='http://test') as client:
+            saving = asyncio.create_task(client.post('/api/settings/integrations', json={'picBedName': 'local'}))
+            assert await asyncio.to_thread(read_started.wait, 5)
+            updating = asyncio.create_task(client.get('/api/cloud/refresh'))
+            try:
+                # 若私有保存没有持有快照锁，刷新会在读取尚未完成时进入并替换版本。
+                assert not await asyncio.to_thread(refresh_entered.wait, .15)
+            finally:
+                release_read.set()
+            saved, updated = await asyncio.gather(saving, updating)
+        assert saved.status_code == updated.status_code == 200
+        assert saved.json()['data']['bangumiUsername'] == 'old-user'
+        assert saved.headers['X-YunYue-Revision'] == 'a' * 40
+        assert state['username'] == 'new-user'
+
+    asyncio.run(concurrent_save_and_refresh())

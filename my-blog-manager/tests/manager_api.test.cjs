@@ -82,3 +82,21 @@ test('并发读取倒序返回时不能用旧结果覆盖新的编辑基线', as
   release();
   await assert.rejects(old, /新的请求替代/);
 });
+
+test('集成页公开设置保留该页读取版本，其他页面刷新不能放行旧 Bangumi 表单', async () => {
+  let revision = 'old';
+  const api = load(async (url, init) => {
+    if (url === '/api/runtime') return Response.json({ api_port: 8000 });
+    if (init.method === 'POST') {
+      assert.equal(init.headers.get('X-YunYue-Revision'), 'old');
+      return Response.json({ ok: false, error: { message: '公开设置已更新' } }, { status: 409 });
+    }
+    return Response.json({ ok: true, data: { bangumiUsername: revision } }, { headers: { 'X-YunYue-Revision': revision } });
+  });
+  await api.managerApi('/api/settings/integrations');
+  revision = 'new';
+  await api.managerApi('/api/settings/public');
+  await assert.rejects(api.managerApi('/api/settings/integrations', {
+    method: 'POST', body: JSON.stringify({ bangumiUsername: 'edited-old-form' }),
+  }), /公开设置已更新/);
+});

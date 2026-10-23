@@ -24,6 +24,7 @@ const empty: Integrations = {
 
 export default function IntegrationForm() {
   const [data, setData] = useState(empty);
+  const [savedBangumi, setSavedBangumi] = useState('');
   const [picBedToken, setPicBedToken] = useState('');
   const [clearPicBedToken, setClearPicBedToken] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -33,7 +34,7 @@ export default function IntegrationForm() {
 
   useEffect(() => {
     managerApi<Integrations>('/api/settings/integrations')
-      .then(setData)
+      .then((value) => { setData(value); setSavedBangumi(value.bangumiUsername); })
       .catch((error) => setStatus({ error: true, message: error.message }))
       .finally(() => setLoading(false));
   }, []);
@@ -45,7 +46,7 @@ export default function IntegrationForm() {
     setStatus(null);
     try {
       const payload = {
-        bangumiUsername: data.bangumiUsername,
+        ...(data.bangumiUsername.trim() !== savedBangumi.trim() ? { bangumiUsername: data.bangumiUsername } : {}),
         picBedUrl: data.picBedUrl,
         picBedName: data.picBedName,
         ...(clearPicBedToken ? { picBedToken: '' } : picBedToken ? { picBedToken } : {}),
@@ -55,6 +56,7 @@ export default function IntegrationForm() {
         body: JSON.stringify(payload),
       });
       setData(saved);
+      setSavedBangumi(saved.bangumiUsername);
       setPicBedToken('');
       setClearPicBedToken(false);
       setStatus({ message: '已保存到管理端工作区。Bangumi 等公开配置需前往“发布”生成差异并同步；密钥只写入本机忽略目录。' });

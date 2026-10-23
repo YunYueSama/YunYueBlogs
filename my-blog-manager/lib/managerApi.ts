@@ -7,7 +7,6 @@ let requestOrder = 0;
 
 function contentResource(path: string) {
   const clean = path.split('?')[0];
-  if (clean === '/api/settings/integrations') return undefined;
   if (clean.startsWith('/api/settings/music')) return '/api/settings/music';
   if (clean.startsWith('/api/settings/')) return clean;
   const group = clean.match(/^\/api\/(gallery|projects|friends|moments|operations|sync)(?:\/|$)/);

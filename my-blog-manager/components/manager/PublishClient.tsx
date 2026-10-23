@@ -76,6 +76,7 @@ export default function PublishClient() {
 
   const changed = useMemo(() => plan?.changes.filter((item) => item.kind !== 'unchanged') ?? [], [plan]);
   const unresolvedJob = Boolean(job && ['queued', 'running'].includes(job.status));
+  const configLocked = Boolean(busy) || unresolvedJob;
   const hasChineseMessage = /[\u3400-\u9fff]/.test(message);
   const repositoryPayload = { blogPath: config.blogPath, remote: config.remote, branch: config.branch };
 
@@ -87,7 +88,7 @@ export default function PublishClient() {
   };
 
   const updateConfig = (next: DeployConfig) => {
-    if (unresolvedJob) return;
+    if (configLocked) return;
     setConfig(next);
     setRepository(null);
     resetPlan();
@@ -115,6 +116,8 @@ export default function PublishClient() {
     setBusy('preview');
     setNotice(null);
     setJob(null);
+    // 新预览完成之前，旧计划不能继续应用到当前工作区。
+    setPlan(null);
     setPhase('idle');
     try {
       await managerApi('/api/deploy/config', { method: 'POST', body: JSON.stringify(config) });
@@ -171,10 +174,10 @@ export default function PublishClient() {
     <section className="console-panel span-5">
       <header><div><h2>发布设置</h2><span>Astro 源码仓库与 Vercel 项目</span></div></header>
       <div className="console-form">
-        <div className="form-field"><label htmlFor="blogPath">本地博客仓库</label><input id="blogPath" disabled={unresolvedJob} value={config.blogPath} onChange={(event) => updateConfig({ ...config, blogPath: event.target.value })} placeholder="D:\\Work\\Projects\\YunYueBlogs\\YunYueBlog" /></div>
-        <div className="form-grid"><div className="form-field"><label htmlFor="remote">Git Remote</label><input id="remote" disabled={unresolvedJob} value={config.remote} onChange={(event) => updateConfig({ ...config, remote: event.target.value })} /></div><div className="form-field"><label htmlFor="branch">目标分支</label><input id="branch" disabled={unresolvedJob} value={config.branch} onChange={(event) => updateConfig({ ...config, branch: event.target.value })} /></div></div>
-        <div className="form-field"><label htmlFor="vercelProject">Vercel 项目地址（可选）</label><input id="vercelProject" type="url" value={config.vercelProjectUrl} onChange={(event) => setConfig({ ...config, vercelProjectUrl: event.target.value })} placeholder="https://vercel.com/team/project" /><small>推送 GitHub 后由 Vercel 仓库集成自动构建；此地址用于快速查看部署状态。</small></div>
-        <div className="form-field"><label htmlFor="commit">中文提交信息</label><input id="commit" required maxLength={120} value={message} aria-invalid={!hasChineseMessage} onChange={(event) => setMessage(event.target.value)} /><small className={!hasChineseMessage ? 'field-error' : ''}>必须至少包含一个中文字符，最多 120 字符。</small></div>
+        <div className="form-field"><label htmlFor="blogPath">本地博客仓库</label><input id="blogPath" disabled={configLocked} value={config.blogPath} onChange={(event) => updateConfig({ ...config, blogPath: event.target.value })} placeholder="D:\\Work\\Projects\\YunYueBlogs\\YunYueBlog" /></div>
+        <div className="form-grid"><div className="form-field"><label htmlFor="remote">Git Remote</label><input id="remote" disabled={configLocked} value={config.remote} onChange={(event) => updateConfig({ ...config, remote: event.target.value })} /></div><div className="form-field"><label htmlFor="branch">目标分支</label><input id="branch" disabled={configLocked} value={config.branch} onChange={(event) => updateConfig({ ...config, branch: event.target.value })} /></div></div>
+        <div className="form-field"><label htmlFor="vercelProject">Vercel 项目地址（可选）</label><input id="vercelProject" disabled={configLocked} type="url" value={config.vercelProjectUrl} onChange={(event) => setConfig({ ...config, vercelProjectUrl: event.target.value })} placeholder="https://vercel.com/team/project" /><small>推送 GitHub 后由 Vercel 仓库集成自动构建；此地址用于快速查看部署状态。</small></div>
+        <div className="form-field"><label htmlFor="commit">中文提交信息</label><input id="commit" disabled={configLocked} required maxLength={120} value={message} aria-invalid={!hasChineseMessage} onChange={(event) => setMessage(event.target.value)} /><small className={!hasChineseMessage ? 'field-error' : ''}>必须至少包含一个中文字符，最多 120 字符。</small></div>
         <button className="console-action" type="button" onClick={() => void preview()} disabled={!config.blogPath || Boolean(busy) || unresolvedJob}>{busy === 'preview' ? <LoaderCircle className="animate-spin" size={16} /> : <Eye size={16} />}生成差异预览</button>
       </div>
     </section>

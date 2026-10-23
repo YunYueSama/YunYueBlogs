@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useNavigationGuard } from '../../context/NavigationGuardContext';
+import { useModalDialog } from '../../lib/useModalDialog';
 import { Search, X, ArrowUpRight } from 'lucide-react';
 
 const destinations = [
@@ -24,27 +25,53 @@ const destinations = [
 export default function QuickNavigation() {
   const router = useRouter();
   const { navigate: guardedNavigate } = useNavigationGuard();
-  const dialog = useRef<HTMLDialogElement>(null);
+  const [open, setOpen] = useState(false);
+  const dialog = useModalDialog(open);
+  const input = useRef<HTMLInputElement>(null);
+  const resultsId = useId();
   const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
   const matches = destinations.filter((item) => `${item.label} ${item.description} ${item.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const selectedIndex = Math.min(activeIndex, Math.max(0, matches.length - 1));
+  const show = useCallback(() => {
+    setQuery(''); setActiveIndex(0); setOpen(true);
+    input.current?.focus();
+  }, []);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        dialog.current?.showModal();
+        show();
       }
     };
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
-  }, []);
-  const navigate = (href: string) => { dialog.current?.close(); guardedNavigate(() => router.push(href)); };
+  }, [show]);
+  useEffect(() => {
+    // 原生 dialog 进入顶层后再聚焦，避免 showModal 把焦点放到关闭按钮。
+    if (open) input.current?.focus({ preventScroll: true });
+  }, [open]);
+  useEffect(() => {
+    if (open) document.getElementById(`${resultsId}-${selectedIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, resultsId, selectedIndex]);
+  const navigate = (href: string) => { dialog.current?.close(); setOpen(false); guardedNavigate(() => router.push(href)); };
   return <>
-    <button className="console-action secondary quick-nav-trigger" onClick={() => { setQuery(''); dialog.current?.showModal(); }} aria-label="打开快捷导航" title="快捷导航（Ctrl+K）"><Search size={16} /><span>快速前往</span><kbd>Ctrl K</kbd></button>
-    <dialog ref={dialog} className="quick-nav-dialog" onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
-      <div className="quick-nav-heading"><h2>快速前往</h2><button className="console-icon" aria-label="关闭快捷导航" onClick={() => dialog.current?.close()}><X size={18} /></button></div>
-      <label className="media-search"><Search size={18} /><input autoFocus aria-label="搜索功能" placeholder="搜索功能，按 Enter 打开第一项" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && matches[0]) navigate(matches[0].href); }} /></label>
-      <div className="quick-nav-results">{matches.map((item) => <button key={item.href} onClick={() => navigate(item.href)}><div><strong>{item.label}</strong><span>{item.description}</span></div><ArrowUpRight size={18} /></button>)}{!matches.length && <p className="console-note">没有匹配的功能，请换个关键词。</p>}</div>
-      <p className="console-note">Ctrl / ⌘ + K 打开 · Esc 关闭 · Tab 选择</p>
-    </dialog>
+    <button className="console-action secondary quick-nav-trigger" onClick={show} aria-label="打开快捷导航" title="快捷导航（Ctrl+K）"><Search size={16} /><span>快速前往</span><kbd>Ctrl K</kbd></button>
+    {open && <dialog ref={dialog} className="quick-nav-dialog" aria-labelledby={`${resultsId}-title`} onCancel={(event) => { event.preventDefault(); setOpen(false); }} onClick={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+      <div className="quick-nav-heading"><h2 id={`${resultsId}-title`}>快速前往</h2><button className="console-icon" aria-label="关闭快捷导航" onClick={() => setOpen(false)}><X size={18} /></button></div>
+      <label className="media-search"><Search size={18} /><input ref={input} role="combobox" aria-expanded="true" aria-controls={resultsId} aria-activedescendant={matches.length ? `${resultsId}-${selectedIndex}` : undefined} aria-autocomplete="list" aria-label="搜索功能" placeholder="搜索功能，使用方向键选择" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} onKeyDown={(event) => {
+        // 中文输入法的回车用于选字，不能误触发页面跳转。
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+        if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && matches.length) {
+          event.preventDefault();
+          setActiveIndex((selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+        } else if (event.key === 'Enter' && matches[selectedIndex]) {
+          event.preventDefault(); navigate(matches[selectedIndex].href);
+        }
+      }} /></label>
+      <div id={resultsId} className="quick-nav-results" role="listbox" aria-label="功能列表">{matches.map((item, index) => <button id={`${resultsId}-${index}`} role="option" aria-selected={selectedIndex === index} tabIndex={-1} key={item.href} onMouseEnter={() => setActiveIndex(index)} onClick={() => navigate(item.href)}><div><strong>{item.label}</strong><span>{item.description}</span></div><ArrowUpRight size={18} /></button>)}</div>
+      {!matches.length && <p className="console-note" role="status">没有匹配的功能，请换个关键词。</p>}
+      <p className="console-note">↑ ↓ 选择 · Enter 打开 · Esc 关闭</p>
+    </dialog>}
   </>;
 }

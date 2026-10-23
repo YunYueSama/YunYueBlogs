@@ -329,12 +329,13 @@ def get_integrations():
 @router.post("/integrations")
 def save_integrations(payload: IntegrationUpdate):
     ensure_workspace()
-    site = read_json(DATA_ROOT / "site.json", {})
-    if not site:
-        return fail("settings_missing", "公开站点配置尚未初始化。", 404)
-    site["bangumiUsername"] = payload.bangumiUsername.strip()
-    site.pop("giscus", None)  # 兼容旧工作区，保存时清除已停用的评论配置。
-    write_json_atomic(DATA_ROOT / "site.json", site)
+    if "bangumiUsername" in payload.model_fields_set:
+        site = read_json(DATA_ROOT / "site.json", {})
+        if not site:
+            return fail("settings_missing", "公开站点配置尚未初始化。", 404)
+        site["bangumiUsername"] = payload.bangumiUsername.strip()
+        site.pop("giscus", None)  # 兼容旧工作区，保存时清除已停用的评论配置。
+        write_json_atomic(DATA_ROOT / "site.json", site)
     write_json_atomic(CONFIG_ROOT / "integrations.json", {"picBedUrl": payload.picBedUrl.strip(), "picBedName": payload.picBedName.strip()})
 
     secrets = read_json(CONFIG_ROOT / "secrets.json", {})

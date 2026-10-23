@@ -1,10 +1,10 @@
 'use client';
 
-import { AlertTriangle, FilePlus2, LoaderCircle, Pencil, Search, Trash2, X } from 'lucide-react';
+import { FilePlus2, LoaderCircle, Pencil, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from '../../components/manager/PageHeader';
+import { ConfirmDialog } from '../../components/manager/ConsoleDialog';
 import { useToast } from '../../components/ToastProvider';
 import { managerApi } from '../../lib/managerApi';
 
@@ -25,35 +25,24 @@ export default function DraftsPage() {
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DraftSummary | null>(null);
+  const request = useRef<AbortController | null>(null);
 
   const loadDrafts = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
     setLoading(true);
     setError('');
     try {
-      const data = await managerApi<{ drafts: DraftSummary[] }>('/api/drafts');
-      setDrafts(data.drafts || []);
+      const data = await managerApi<{ drafts: DraftSummary[] }>('/api/drafts', { signal: controller.signal });
+      if (!controller.signal.aborted) setDrafts(data.drafts || []);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '草稿读取失败');
+      if (!controller.signal.aborted) setError(loadError instanceof Error ? loadError.message : '草稿读取失败');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadDrafts(); }, [loadDrafts]);
-
-  useEffect(() => {
-    if (!pendingDelete) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !removing) setPendingDelete(null);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [pendingDelete, removing]);
+  useEffect(() => { void loadDrafts(); return () => request.current?.abort(); }, [loadDrafts]);
 
   const filteredDrafts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -88,8 +77,8 @@ export default function DraftsPage() {
     <section className="console-panel">
       <header><div><h2>未发布内容</h2><span>{drafts.length} 份本地草稿</span></div></header>
       <div className="structured-toolbar">
-        <label className="media-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、摘要或正文" /></label>
-        <button className="console-action secondary" type="button" onClick={() => void loadDrafts()} disabled={loading}>{loading ? <LoaderCircle className="animate-spin" size={16} /> : <Search size={16} />}刷新</button>
+        <label className="media-search"><Search size={16} /><input aria-label="搜索草稿" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、摘要或正文" /></label>
+        <button className="console-action secondary" type="button" onClick={() => void loadDrafts()} disabled={loading || Boolean(pendingDelete)}>{loading ? <LoaderCircle className="animate-spin" size={16} /> : <Search size={16} />}刷新</button>
       </div>
 
       {error && <div className="form-status error" role="alert">{error}</div>}
@@ -100,13 +89,7 @@ export default function DraftsPage() {
       </article>)}</div> : <div className="structured-empty"><FilePlus2 size={28} /><strong>{query ? '没有匹配的草稿' : '草稿箱是空的'}</strong><span>{query ? '换一个关键词试试。' : '在编辑器中保存草稿后，它会出现在这里。'}</span></div>}
     </section>
 
-    {pendingDelete && createPortal(<div className="console-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !removing) setPendingDelete(null); }}>
-      <section className="console-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-draft-title">
-        <header><div><span>DESTRUCTIVE ACTION</span><h2 id="delete-draft-title">删除本地草稿</h2></div><button className="console-icon" type="button" onClick={() => setPendingDelete(null)} disabled={Boolean(removing)} aria-label="关闭"><X size={18} /></button></header>
-        <div className="console-dialog-body"><AlertTriangle size={28} color="var(--console-coral)" /><p>将删除“{pendingDelete.title || '无标题草稿'}”的草稿副本。已发布的文章或杂谈不会受到影响。</p></div>
-        <footer><button className="console-action secondary" type="button" onClick={() => setPendingDelete(null)} disabled={Boolean(removing)}>取消</button><button className="console-action danger" type="button" onClick={() => void removeDraft()} disabled={Boolean(removing)}>{removing ? <LoaderCircle className="animate-spin" size={16} /> : <Trash2 size={16} />}确认删除</button></footer>
-      </section>
-    </div>, document.body)}
+    <ConfirmDialog open={Boolean(pendingDelete)} title="删除本地草稿" description={`将删除“${pendingDelete?.title || '无标题草稿'}”的草稿副本，删除后无法恢复。已发布的文章或杂谈不会受到影响。`} busy={Boolean(removing)} confirmLabel={removing ? '正在删除…' : '确认删除'} onClose={() => setPendingDelete(null)} onConfirm={() => void removeDraft()} />
   </>;
 }
 

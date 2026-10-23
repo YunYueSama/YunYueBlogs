@@ -81,6 +81,22 @@ def git_changes(target: Path) -> list[str]:
     return sorted(paths)
 
 
+def repository_identity(target: Path) -> dict[str, str | None]:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"], cwd=target,
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
+    )
+    if result.returncode != 0:
+        raise ValueError("无法读取目标仓库提交，请先确认仓库已有有效提交。")
+    branch = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "HEAD"], cwd=target,
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
+    )
+    if branch.returncode not in (0, 1):
+        raise ValueError("无法读取目标仓库分支，请稍后重新预览。")
+    return {"head": result.stdout.strip(), "branch": branch.stdout.strip() or None}
+
+
 def managed_destination(target: Path, relative: str) -> Path:
     relative_path = Path(relative)
     if relative_path.is_absolute() or ".." in relative_path.parts:
@@ -132,6 +148,10 @@ def create_sync_plan(payload: SyncRequest):
     if error or target is None:
         return fail("invalid_target", error or "目标路径无效。", 400)
 
+    try:
+        target_identity = repository_identity(target)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return fail("repository_unavailable", "无法读取目标仓库基线，请确认仓库状态后重新预览。", 409)
     dirty = git_changes(target)
     files = source_files()
     if not files:
@@ -154,12 +174,18 @@ def create_sync_plan(payload: SyncRequest):
     for stale in sorted(previous_files - current_files):
         changes.append({"kind": "delete", "path": stale})
 
+    try:
+        if repository_identity(target) != target_identity:
+            return fail("repository_changed", "生成预览期间目标仓库提交或分支发生变化，请重新预览。", 409)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return fail("repository_unavailable", "无法确认目标仓库基线，请重新预览。", 409)
     plan_id = uuid.uuid4().hex
     plan = {
         "remoteRevision": cloud_content.status().get('revision'),
         "planId": plan_id,
         "createdAt": int(time.time()),
         "target": str(target),
+        "targetIdentity": target_identity,
         "sourceDigest": digest_files(files),
         "files": sorted(files),
         "changes": changes,
@@ -185,6 +211,14 @@ def apply_sync_plan(payload: ApplyRequest):
     if plan.get('remoteRevision') and plan['remoteRevision'] != cloud_content.status().get('revision'):
         return fail('remote_changed', '服务器内容已更新，请重新生成发布预览。', 409)
     with SYNC_LOCK:
+        # 干净工作区仍可能已被 pull、commit 或切换分支，不能只检查未提交改动。
+        if not plan.get("targetIdentity"):
+            return fail("stale_plan", "此预览缺少目标仓库基线，请重新生成同步计划。", 409)
+        try:
+            if repository_identity(target) != plan["targetIdentity"]:
+                return fail("repository_changed", "预览后目标仓库提交或分支发生变化，请重新预览。", 409)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return fail("repository_unavailable", "无法确认目标仓库基线，请重新预览。", 409)
         if git_changes(target):
             return fail("repository_changed", "生成计划后目标仓库状态发生变化，请重新预览。", 409)
 

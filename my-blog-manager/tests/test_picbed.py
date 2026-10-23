@@ -4,11 +4,35 @@ import asyncio
 import json
 from io import BytesIO
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 import httpx
 from starlette.datastructures import Headers, UploadFile
 
 from cms_core.api import picbed
+
+
+def test_concurrent_register_and_remove_keep_all_other_assets(tmp_path: Path, monkeypatch) -> None:
+    configure(tmp_path, monkeypatch)
+    existing = response_json(picbed.register_external_asset(picbed.ExternalAssetRequest(url='https://images.example.invalid/old.png')))['data']
+    original_write = picbed.write_json_atomic
+
+    def slow_write(path, data):
+        time.sleep(.005)
+        original_write(path, data)
+
+    monkeypatch.setattr(picbed, 'write_json_atomic', slow_write)
+
+    def update(index):
+        if index == 0:
+            return picbed.remove_asset(existing['id'])
+        return picbed.register_external_asset(picbed.ExternalAssetRequest(url=f'https://images.example.invalid/{index}.png'))
+
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        responses = list(workers.map(update, range(25)))
+    assert all(response.status_code in (200, 201) for response in responses)
+    assert {asset['url'] for asset in picbed.read_assets()} == {f'https://images.example.invalid/{index}.png' for index in range(1, 25)}
 
 
 def response_json(response) -> dict:

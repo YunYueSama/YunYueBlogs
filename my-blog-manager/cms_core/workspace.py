@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ CONFIG_ROOT = WORKSPACE_ROOT / "config"
 PLANS_ROOT = WORKSPACE_ROOT / "plans"
 JOBS_ROOT = WORKSPACE_ROOT / "jobs"
 DRAFTS_ROOT = WORKSPACE_ROOT / "drafts"
+JSON_IO_LOCK = threading.Lock()
 
 
 def ensure_workspace() -> Path:
@@ -114,16 +117,29 @@ def workspace_counts() -> dict[str, int]:
 
 def read_json(path: Path, default: Any) -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        with JSON_IO_LOCK:
+            return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return default
 
 
 def write_json_atomic(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    content = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    # 每次写入独占临时文件，避免后台任务与前台保存覆盖同一个 .tmp。
+    # 在目标目录创建，保持 replace 在同一文件系统内原子完成。
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f".{path.name}.", suffix=".tmp", delete=False) as output:
+            temporary = Path(output.name)
+            output.write(content)
+        # Windows 不允许读取句柄或另一个 replace 与替换瞬间争用目标。
+        with JSON_IO_LOCK:
+            os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _extract_typescript_array(path: Path, export_name: str) -> list[Any] | None:

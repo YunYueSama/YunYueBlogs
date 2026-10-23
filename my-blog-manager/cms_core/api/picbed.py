@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ router = APIRouter()
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 MAX_ASSETS = 2_000
 MEDIA_FILE = "media.json"
+ASSETS_LOCK = threading.Lock()
 
 
 class ImageAsset(BaseModel):
@@ -141,9 +143,11 @@ def read_assets() -> list[dict[str, Any]]:
 
 
 def save_asset(asset: ImageAsset) -> ImageAsset:
-    assets = [item for item in read_assets() if item.get("url") != asset.url]
-    assets.insert(0, asset.model_dump())
-    write_json_atomic(assets_path(), assets[:MAX_ASSETS])
+    # 上传回调、外链登记和移除可能并发，锁覆盖读取到替换的整个过程。
+    with ASSETS_LOCK:
+        assets = [item for item in read_assets() if item.get("url") != asset.url]
+        assets.insert(0, asset.model_dump())
+        write_json_atomic(assets_path(), assets[:MAX_ASSETS])
     return asset
 
 
@@ -188,11 +192,12 @@ def register_external_asset(payload: ExternalAssetRequest):
 def remove_asset(asset_id: str):
     if not re.fullmatch(r"asset_[a-f0-9]{32}", asset_id):
         return fail("invalid_asset_id", "媒体资源 ID 无效。")
-    assets = read_assets()
-    remaining = [item for item in assets if item.get("id") != asset_id]
-    if len(remaining) == len(assets):
-        return fail("asset_not_found", "没有找到该媒体资源。", 404)
-    write_json_atomic(assets_path(), remaining)
+    with ASSETS_LOCK:
+        assets = read_assets()
+        remaining = [item for item in assets if item.get("id") != asset_id]
+        if len(remaining) == len(assets):
+            return fail("asset_not_found", "没有找到该媒体资源。", 404)
+        write_json_atomic(assets_path(), remaining)
     return ok({"id": asset_id, "remoteDeleted": False})
 
 

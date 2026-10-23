@@ -135,6 +135,52 @@ def test_push_rejects_unrelated_changes(isolated_workspace: Path, tmp_path: Path
     assert payload["error"]["details"] == ["README.md"]
 
 
+@pytest.mark.parametrize("change", ["commit", "branch", "detached"])
+def test_sync_plan_rejects_clean_target_baseline_changes(isolated_workspace: Path, tmp_path: Path, change: str) -> None:
+    target = tmp_path / "blog"
+    initialize_blog(target)
+    (target / "posts").mkdir()
+    article = target / "posts" / "shared.md"
+    article.write_text("预览时的正文", encoding="utf-8")
+    commit_all(target)
+    (isolated_workspace / "content" / "posts" / "shared.md").write_text("准备同步的正文", encoding="utf-8")
+    plan = response_json(sync.create_sync_plan(sync.SyncRequest(blogPath=str(target))))["data"]
+
+    if change == "commit":
+        article.write_text("预览后的新提交", encoding="utf-8")
+        commit_all(target, "新提交")
+    elif change == "branch":
+        git(target, "checkout", "-b", "other")
+    else:
+        git(target, "checkout", "--detach")
+    expected = article.read_bytes()
+    assert sync.git_changes(target) == []
+
+    response = sync.apply_sync_plan(sync.ApplyRequest(blogPath=str(target), planId=plan["planId"]))
+
+    assert response.status_code == 409
+    assert response_json(response)["error"]["code"] == "repository_changed"
+    assert article.read_bytes() == expected
+    assert not (target / sync.MANIFEST_NAME).exists()
+
+
+def test_legacy_sync_plan_requires_new_preview(isolated_workspace: Path, tmp_path: Path) -> None:
+    target = tmp_path / "blog"
+    initialize_blog(target)
+    commit_all(target)
+    (isolated_workspace / "content" / "posts" / "new.md").write_text("正文", encoding="utf-8")
+    plan = response_json(sync.create_sync_plan(sync.SyncRequest(blogPath=str(target))))["data"]
+    del plan["targetIdentity"]
+    plan_path = isolated_workspace / "plans" / f"{plan['planId']}.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    response = sync.apply_sync_plan(sync.ApplyRequest(blogPath=str(target), planId=plan["planId"]))
+
+    assert response.status_code == 409
+    assert response_json(response)["error"]["code"] == "stale_plan"
+    assert not (target / "posts" / "new.md").exists()
+
+
 def test_push_request_requires_chinese_commit_and_safe_git_names() -> None:
     with pytest.raises(ValidationError):
         deploy.PushRequest(blogPath="C:/blog", commitMessage="update content")

@@ -16,7 +16,7 @@
   },
   "webview": {
     "file": "MicrosoftEdgeWebview2Setup.exe",
-    "url": "https://go.microsoft.com/fwlink/p/?LinkId=2124703",
-    "sha256": "87ad3fe4e3faa1b48bad79de1b9269e5eb30574545bb6f5f7c37d51035748caf"
+    "url": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/ed55121c-0243-4978-b7e7-56505b5b96ff/MicrosoftEdgeWebview2Setup.exe",
+    "sha256": "f414de01c4680f0bb0694d1ea7803c6968f3a81bf6bad01b89bfc65dce14c2a2"
   }
 }

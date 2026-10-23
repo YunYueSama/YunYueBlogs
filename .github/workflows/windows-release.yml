@@ -1,13 +1,13 @@
 name: Windows manager release
 on:
   push:
-    tags: ['manager-v*']
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
         description: '安装包版本'
         required: true
-        default: '2.1.1'
+        default: '1.0.0'
 permissions:
   contents: write
 jobs:
@@ -53,18 +53,19 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $version = $env:MANAGER_VERSION
-          if (!$version) { $version = $env:RELEASE_TAG.Replace('manager-v', '') }
+          if (!$version) { $version = $env:RELEASE_TAG -replace '^v', '' }
           python my-blog-manager/scripts/build-windows.py --version $version
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: .release/windows/artifacts/*
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/manager-v')
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         shell: pwsh
         run: |
           $assets = @(Get-ChildItem .release/windows/artifacts -File | ForEach-Object FullName)
-          gh release create $env:RELEASE_TAG @assets --verify-tag --title "星辉云端 Windows 管理端 $env:RELEASE_TAG" --notes-file my-blog-manager/docs/windows-release.md
+          $title = $env:RELEASE_TAG -replace '^v', 'V'
+          gh release create $env:RELEASE_TAG @assets --verify-tag --title $title --notes-file my-blog-manager/docs/windows-release.md

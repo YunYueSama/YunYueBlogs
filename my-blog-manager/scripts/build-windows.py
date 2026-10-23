@@ -68,11 +68,11 @@ def main():
     if hasattr(os.sys.stdout, 'reconfigure'):
         os.sys.stdout.reconfigure(encoding='utf-8')
     args = argparse.ArgumentParser()
-    args.add_argument('--version', default='2.1.1')
+    args.add_argument('--version', default='1.0.0')
     args.add_argument('--iscc', default=os.environ.get('ISCC_PATH', r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'))
     options = args.parse_args()
     if not re.fullmatch(r'\d+\.\d+\.\d+', options.version):
-        args.error('版本号须为数字形式，例如 2.1.0')
+        args.error('版本号须为数字形式，例如 1.0.0')
     release = ROOT / '.release/windows'
     release.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix='build-', dir=release))

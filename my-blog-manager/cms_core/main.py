@@ -11,7 +11,7 @@ from cms_core import cloud_content
 
 cloud_requests = asyncio.Lock()
 
-app = FastAPI(title="星辉云端控制台 API", version="2.0.0", max_request_size=50 * 1024 * 1024)
+app = FastAPI(title="星辉云端控制台 API", version="1.0.0")
 
 @app.middleware('http')
 async def synchronize_cloud_content(request, call_next):
@@ -87,7 +87,7 @@ def initialize_workspace():
 
 @app.get("/api/status")
 def get_status():
-    return {"ok": True, "data": {"status": "online", "version": "2.0.0", "counts": workspace_counts()}}
+    return {"ok": True, "data": {"status": "online", "version": "1.0.0", "counts": workspace_counts()}}
 
 
 app.include_router(music.router, prefix="/api/music", tags=["Music"])

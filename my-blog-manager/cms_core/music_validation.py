@@ -11,7 +11,7 @@ from cms_core import kugou
 
 MusicSource = Literal["netease", "kugou"]
 NETEASE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; YunYueBlogs-Manager/2.0; +https://majo-elaina.top)",
+    "User-Agent": "Mozilla/5.0 (compatible; YunYueBlogs-Manager/2.0; +https://yunyuesama.cn)",
     "Referer": "https://music.163.com/",
 }
 VALIDATION_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}

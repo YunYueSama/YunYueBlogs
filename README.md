@@ -2,7 +2,7 @@
 
 **Ai·Code·Magic** — 为个人博客准备的本地桌面控制台，负责创作、音乐、图床与安全发布。
 
-[访问博客](https://majo-elaina.top) · [公开站源码](https://github.com/YunYueSama/YunYueBlog) · [English](README_en.md) · [技术文档](docs/README.md)
+[访问博客](https://yunyuesama.cn) · [公开站源码](https://github.com/YunYueSama/YunYueBlog) · [English](README_en.md) · [技术文档](docs/README.md)
 
 ![管理端概览](.github/readme/console-overview.png)
 

@@ -3,7 +3,7 @@
 export const siteConfig = {
   // 1. 网站标题与博主信息
   title: "YunYueSama の 神隐之地",
-  faviconUrl: "https://tu.majo-elaina.top/file/1781463978671_Aoko.jpg",
+  faviconUrl: "https://tu.yunyuesama.cn/file/1781463978671_Aoko.jpg",
   authorName: "YunYueSama",
   bio: "梦想是打造具备独立思考能力和个性化人格的人工智能体，希望未来的 AI 能够真正理解人类、辅助生活，并带来更多创新可能。",
 
@@ -15,14 +15,14 @@ export const siteConfig = {
   navAfter: "神隐之地",
 
   // 2. 头像设置 (支持网络链接，或将图片放入 public 文件夹后使用 "/me.jpg")
-  avatarUrl: "https://tu.majo-elaina.top/file/1781463978671_Aoko.jpg",
+  avatarUrl: "https://tu.yunyuesama.cn/file/1781463978671_Aoko.jpg",
 
   // 3. 网站背景设置 (二选一)
   // 如果想用纯图片背景，请在下面 bgImage 写路径，并将 useGradient 设为 false
   useGradient: false,
   themeColors: ["#a18cd1", "#fbc2eb", "#a1c4fd", "#c2e9fb"], // 呼吸流动的颜色组合
 // 修改这里：变成图片数组
-  bgImages: ["https://tu.majo-elaina.top/file/爱丽丝-午觉.png", "https://tu.majo-elaina.top/file/久美子椅.png", "https://tu.majo-elaina.top/file/1781521549076_菲比-2.jpg", "https://tu.majo-elaina.top/file/绵城-晚霞路灯.jpg", "https://tu.majo-elaina.top/file/绵城-晚霞教学楼.jpg"],
+  bgImages: ["https://tu.yunyuesama.cn/file/爱丽丝-午觉.png", "https://tu.yunyuesama.cn/file/久美子椅.png", "https://tu.yunyuesama.cn/file/1781521549076_菲比-2.jpg", "https://tu.yunyuesama.cn/file/绵城-晚霞路灯.jpg", "https://tu.yunyuesama.cn/file/绵城-晚霞教学楼.jpg"],
 
   // 4. 文章默认封面图 (当 Markdown 没写 cover 时显示)
   defaultPostCover: "https://bu.dusays.com/2026/03/24/69c1e38b346cb.jpg",
@@ -46,7 +46,7 @@ export const siteConfig = {
 
   // 👇 【新增】：图床核心配置 (PicBed Configuration)
   picBedName: "YunYueBlog",
-  picBedUrl: "https://tu.majo-elaina.top", // 默认的 Lsky Pro API 地址
+  picBedUrl: "https://tu.yunyuesama.cn", // 默认的 Lsky Pro API 地址
   picBedToken: "", // 留空，等你能在后台填入并覆写
 
   // 👇 【新增】：全局背景弹幕配置
@@ -70,7 +70,7 @@ export const siteConfig = {
     maxOutputTokens: 150,
     temperature: 0.85,
   },
-  friendLinkApplyFormat: "名称：YunYueSamaの神隐之地\n简介：Believe there's magic here tonight\n链接：https://www.majo-elaina.top\n头像：https://tu.majo-elaina.top/file/1781463978671_Aoko.jpg",
+  friendLinkApplyFormat: "名称：YunYueSamaの神隐之地\n简介：Believe there's magic here tonight\n链接：https://www.yunyuesama.cn\n头像：https://tu.yunyuesama.cn/file/1781463978671_Aoko.jpg",
 
 
   // 👇 【新增】：RPG 等级与徽章系统开关 (展示在创意工坊、帝江号与留言板中)

@@ -3,7 +3,7 @@ title: 关于我
 date: '2026-03-31 20:54:42'
 tags: []
 mood: ''
-cover: https://tu.majo-elaina.top/file/青子-暗示.png
+cover: https://tu.yunyuesama.cn/file/青子-暗示.png
 description: ''
 ---
 

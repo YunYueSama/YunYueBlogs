@@ -2,7 +2,7 @@
 
 **Ai·Code·Magic** — a Windows desktop console for writing, media, music and reviewed publishing.
 
-[中文文档](README.md) · [Live blog](https://majo-elaina.top) · [Public blog repository](https://github.com/YunYueSama/YunYueBlog)
+[中文文档](README.md) · [Live blog](https://yunyuesama.cn) · [Public blog repository](https://github.com/YunYueSama/YunYueBlog)
 
 ![Console overview](.github/readme/console-overview.png)
 

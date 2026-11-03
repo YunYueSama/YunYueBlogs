@@ -4,6 +4,8 @@ A browser-based studio for a personal Astro blog: write, collect music, manage i
 
 [中文](README.md) · [Live blog](https://yunyuesama.cn) · [Public blog source](https://github.com/YunYueSama/YunYueBlog)
 
+![Online studio sign-in](.github/readme/cloud-console-login.webp)
+
 ## Features
 
 - Single-owner account, one-time activation, mandatory first password change, server-side sessions.

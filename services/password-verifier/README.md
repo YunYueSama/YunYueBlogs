@@ -25,4 +25,6 @@ LX API 2.0 兼容范围包括 musicUrl、受控 HTTP、事件、Buffer、crypto�
 
 将本目录作为独立 Vercel 项目根目录，使用受支持的 Node 版本，并在服务端配置 `PASSWORD_SERVICE_KEY`。控制台填写 `PASSWORD_SERVICE_URL=https://<your-service>/api/password`，密钥与该服务一致。不要把密钥放进浏览器环境变量、仓库或 CLI 参数。
 
+默认使用单个 `hkg1` 运行区域，减少连接亚太音乐上游的往返；可按自己的用户地域与套餐修改 `regions`。这不代表上游始终可用，也不取消单次执行与请求限额。SDK 采用显式模块入口，部署文件包含其动态资源与 QuickJS WASM，避免本机正常而 Serverless 缺少依赖。
+
 验收至少包含：未授权请求返回 401；随机密码哈希与核验通过；真实音源可读取渠道声明；代表曲目的解析结果与浏览器解码可用。不要在公开日志记录脚本、临时签名 URL、内部密钥或请求正文。API 调用受套餐函数与 CPU 限制，超时和上游不可用不等于歌曲永久无效。

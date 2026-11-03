@@ -18,6 +18,9 @@ export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionCont
   const version=JSON.stringify([track,data.preference,source?.revision||0]);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(version)))).map(v=>v.toString(16).padStart(2,'0')).join('');
   const key=new Request(`https://music-cache.invalid/resolved/${hash}`);let resolved:ResolvedMusic|undefined;
   const cache=await caches.open('music-resolution-v1');const cached=await cache.match(key);if(cached)resolved=await cached.json<ResolvedMusic>();
+  const status=play&&new URL(request.url).searchParams.get('status')==='true';
+  // 播放失败后的诊断只查询已有解析结果，不能再触发整套取源和音质回退。
+  if(status&&!resolved)return json({error:'音乐音源暂时无法连接，请稍后刷新音源重试。',code:'music_upstream'},503,{'Access-Control-Allow-Origin':env.SITE_URL,Vary:'Origin'});
   if(!resolved){
     const custom=source?.value.enabled&&source.value.active;
     if(!custom)throw new HttpError(503,'音乐音源尚未就绪，请稍后重试。');
@@ -26,6 +29,7 @@ export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionCont
       if(pending.size>=32)throw new HttpError(503,'播放服务繁忙，请稍后重试。');
       current=musicService<ResolvedMusic>(env,{source:track.source,operation:'resolve',track,preference:data.preference,script:custom.script});
       pending.set(hash,current);
+      ctx.waitUntil(current.then(()=>{},()=>{}));
     }
     try{resolved=await current;}finally{if(pending.get(hash)===current)pending.delete(hash);}
     ctx.waitUntil(cache.put(key,new Response(JSON.stringify(resolved),{headers:{'Content-Type':'application/json','Cache-Control':'public, max-age=60'}})));
@@ -34,7 +38,7 @@ export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionCont
   if(!play)return response;
   const result=await response.json<{url:string}>();
   if(new URL(request.url).searchParams.get('warm')==='true')return new Response(null,{status:204,headers:{'Cache-Control':'private, no-store','Access-Control-Allow-Origin':env.SITE_URL,Vary:'Origin'}});
-  if(new URL(request.url).searchParams.get('status')==='true'){
+  if(status){
     const stream=new URL(result.url);
     if(stream.origin===env.MUSIC_STREAM_ORIGIN&&stream.pathname==='/public/music/stream'){
       stream.searchParams.set('status','true');

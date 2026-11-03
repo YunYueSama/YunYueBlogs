@@ -82,6 +82,12 @@ describe.sequential('音乐连接、加密设置与边缘传输',()=>{
     const [warm,play]=await Promise.all([mf.dispatchFetch(base+path+'&warm=true',{redirect:'manual'}),mf.dispatchFetch(base+path,{redirect:'manual'})]);
     expect(warm.status).toBe(204);expect(await warm.text()).toBe('');expect(play.status).toBe(307);expect(resolutions-before).toBe(1);
   });
+  it('失败后的状态查询不再次调用音源，避免一次失败叠加多次慢取源',async()=>{
+    const path='/public/music/play?'+new URLSearchParams(sign({action:'play',track:{source:'kugou',id:'C'.repeat(32)},preference:'320k'}))+'&status=true';
+    const before=resolutions;const result=await mf.dispatchFetch(base+path);
+    expect(result.status).toBe(503);expect(resolutions).toBe(before);
+    expect(await result.text()).toContain('稍后刷新音源');
+  });
   it('MP3/FLAC 正文及 Range 字节保持一致，HEAD 不计字节预留',async()=>{
     await db.prepare("DELETE FROM rate_limits WHERE key LIKE 'delivery-bytes:%'").run();
     const head=await call(stream({}),'HEAD');expect(head.status,await head.clone().text()).toBe(200);expect(await head.text()).toBe('');

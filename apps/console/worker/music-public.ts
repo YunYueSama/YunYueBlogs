@@ -5,13 +5,15 @@ import {readPrivate} from './private-settings';
 import {musicService} from './integrations';
 import {verifyMusicTicket,issueMusicTicket,allowedMediaHost} from './music-delivery';
 import type {ResolvedMusic,SourceState} from './music-sources';
+import {publishedPlayback} from './music-published';
 const pending=new Map<string,Promise<ResolvedMusic>>();
 
 export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionContext,path:string):Promise<Response|undefined>{
   const play=path==='/public/music/play';
   if(!play&&path!=='/public/music/resolve')return;
   if(play?!['GET','HEAD'].includes(request.method):request.method!=='POST')throw new HttpError(405,'请求方式不正确。');
-  const input=play?Object.fromEntries(new URL(request.url).searchParams):await readJson(request,12000);const data=await verifyMusicTicket(env,String(input.ticket||''),String(input.signature||'')) as {action?:string;track?:{source:string;id:string};preference?:string;exp:number};
+  const input=play?Object.fromEntries(new URL(request.url).searchParams):await readJson(request,12000);
+  const data=play&&input.catalog?{action:'play',...await publishedPlayback(env,input as Record<string,string>)}:await verifyMusicTicket(env,String(input.ticket||''),String(input.signature||'')) as {action?:string;track?:{source:string;id:string};preference?:string;exp:number};
   const track=data.track;if(data.action!==(play?'play':'resolve')||!track||!validMusicId(track.source,track.id))throw new HttpError(403,'歌曲请求无效。');
   await limit(env,'public-music-resolution',180,60);
   const source=await readPrivate<SourceState>(env,'music-source');

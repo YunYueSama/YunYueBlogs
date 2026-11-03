@@ -7,9 +7,11 @@ import { createHash, createHmac } from 'node:crypto';
 import { mockMusicOperation } from './mock-integrations.mjs';
 
 let mf: Miniflare; let db: D1Database;
-let resolutions=0;
+let resolutions=0;let manifestRequests=0;let lastResolve:Record<string,unknown>={};
 const base='https://studio.example.test',secret='c'.repeat(64),csrf='acceptance-csrf',session='a'.repeat(64);
 const audio=new Uint8Array(400000).map((_,i)=>i%251);
+const published={tracks:[{key:'kugou:'+ 'D'.repeat(32),source:'kugou',id:'D'.repeat(32),name:'公开歌曲',artist:'公开作者'}],quality:'320k'};
+const publication={version:1,...published,revision:createHash('sha256').update(JSON.stringify(published)).digest('hex')};
 function sign(data:object){const ticket=Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600,...data})).toString('base64url');return {ticket,signature:createHmac('sha256',Buffer.from(secret,'hex')).update(ticket).digest('base64url')};}
 const stream=(data:object)=>'/public/music/stream?'+new URLSearchParams(sign({source:'kugou',id:'A'.repeat(32),url:'http://fs.youthandroid2.kugou.com/test.mp3',quality:'320 kbps',size:audio.length,...data}));
 const call=(path:string,method='GET',body?:object,headers:Record<string,string>={})=>mf.dispatchFetch(base+path,{method,headers:{Cookie:`__Host-yunyue-session=${session}`,Origin:base,'Content-Type':'application/json','X-CSRF-Token':csrf,...headers},body:body?JSON.stringify(body):undefined});
@@ -17,7 +19,8 @@ beforeAll(async()=>{
   const bundle=await build({entryPoints:[resolve('worker/index.ts')],bundle:true,write:false,format:'esm',platform:'browser'});
   mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-11-03',d1Databases:['DB'],r2Buckets:['MEDIA'],bindings:{SETTINGS_ENCRYPTION_KEY:secret,MUSIC_DELIVERY_KEY:secret,MUSIC_DELIVERY_BUDGET_BYTES:'2000000',MUSIC_STREAM_ORIGIN:'https://audio.example.test',PASSWORD_SERVICE_URL:'https://internal.test/api/password',PASSWORD_SERVICE_KEY:'test',SITE_URL:'https://site.example.test'},outboundService:async request=>{
     const url=new URL(request.url);
-    if(url.hostname==='internal.test'){const input=await request.json() as {operation:string};if(input.operation==='resolve')resolutions++;return WorkerResponse.json(await mockMusicOperation(input));}
+    if(url.hostname==='internal.test'){const input=await request.json() as {operation:string};if(input.operation==='resolve'){resolutions++;lastResolve=input;}return WorkerResponse.json(await mockMusicOperation(input));}
+    if(url.hostname==='site.example.test'&&url.pathname==='/music-catalog.json'){manifestRequests++;return WorkerResponse.json(publication);}
     if(url.hostname==='tu.yunyuesama.cn')return WorkerResponse.json([{src:'/file/test.webp'}]);
     if(url.hostname==='fs.youthandroid2.kugou.com'){
       const range=request.headers.get('range')?.match(/^bytes=(\d+)-(\d+)$/);const start=range?Number(range[1]):0,end=range?Number(range[2]):audio.length-1;
@@ -87,6 +90,15 @@ describe.sequential('音乐连接、加密设置与边缘传输',()=>{
     const before=resolutions;const result=await mf.dispatchFetch(base+path);
     expect(result.status).toBe(503);expect(resolutions).toBe(before);
     expect(await result.text()).toContain('稍后刷新音源');
+  });
+  it('静态歌单仅允许正式清单中的曲目，音质与元数据不信任浏览器',async()=>{
+    const path='/public/music/play?'+new URLSearchParams({catalog:publication.revision,track:published.tracks[0].key,quality:'lossless',name:'伪造歌曲'});
+    const response=await mf.dispatchFetch(base+path,{redirect:'manual'});expect(response.status,await response.clone().text()).toBe(307);
+    expect(lastResolve.preference).toBe('320k');expect(lastResolve.track).toMatchObject({name:'公开歌曲',id:'D'.repeat(32)});
+    const before=resolutions;
+    expect((await mf.dispatchFetch(base+path.replace(publication.revision,'e'.repeat(64)),{redirect:'manual'})).status).toBe(409);
+    expect((await mf.dispatchFetch(base+path.replace('track=kugou%3A'+ 'D'.repeat(32),'track=kugou%3A'+ 'E'.repeat(32)),{redirect:'manual'})).status).toBe(403);
+    expect(resolutions).toBe(before);expect(manifestRequests).toBe(1);
   });
   it('MP3/FLAC 正文及 Range 字节保持一致，HEAD 不计字节预留',async()=>{
     await db.prepare("DELETE FROM rate_limits WHERE key LIKE 'delivery-bytes:%'").run();

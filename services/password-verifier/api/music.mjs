@@ -3,6 +3,7 @@ import {channels,searchCatalog,validTrackId} from '../lib/music-catalog.mjs';
 import {publicRequest} from '../lib/public-request.mjs';
 import {resolveCustom,mediaHost} from '../lib/music-resolution.mjs';
 import {unpackMusicInput} from '../lib/music-input.mjs';
+import {publicNetease} from '../lib/netease-public.mjs';
 import { createRequire } from 'node:module';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 const require=createRequire(import.meta.url);
@@ -41,7 +42,15 @@ export async function musicOperation(input,call=provider,measurement) {
   if(operation==='resolve'){
     const track=input.track;
     if(!track||track.source!==source||!validTrackId(source,track.id))throw new Error('invalid_track');
-    if(input.script){const deadline=Date.now()+21000;const catalog=source==='kugou'?(await call(source,'privilege_lite',{hash:track.id})).body?.data?.[0]:null;return resolveCustom({...input,deadline},catalog,request,measurement?.timing);}
+    if(input.script){
+      const deadline=Date.now()+21000;
+      if(source==='netease'&&input.purpose==='published'){
+        const began=performance.now(),fast=await publicNetease(track,input.preference,{lookup:measurement?.publicLookup,request});
+        if(measurement?.timing)measurement.timing.official=performance.now()-began;
+        if(fast)return fast;
+      }
+      const catalog=source==='kugou'?(await call(source,'privilege_lite',{hash:track.id})).body?.data?.[0]:null;return resolveCustom({...input,deadline},catalog,request,measurement?.timing);
+    }
     throw new Error('source_required');
   }
   throw new Error('invalid_operation');

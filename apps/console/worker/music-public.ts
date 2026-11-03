@@ -37,7 +37,7 @@ export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionCont
     }
     if(!current){
       if(pending.size>=32)throw new HttpError(503,'播放服务繁忙，请稍后重试。');
-      current=musicService<ResolvedMusic>(env,{source:track.source,operation:'resolve',track,preference:data.preference,script:custom.script});
+      current=musicService<ResolvedMusic>(env,{source:track.source,operation:'resolve',purpose:'published',track,preference:data.preference,script:custom.script});
       pending.set(hash,current);
       ctx.waitUntil(current.then(()=>{},()=>{}));
     }

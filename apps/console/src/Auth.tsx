@@ -21,7 +21,7 @@ export function Auth({ session, activationToken, onSession, onLogout }: { sessio
   return <main className="auth-page">
     <section className="auth-story" aria-label="云月创作间">
       <img className="auth-art" src="/brand/studio-cover.webp" alt="" width="1672" height="941"/>
-      <a className="auth-brand" href="https://yunyuesama.cn"><span className="monogram">Y.</span><span>YUNYUE<small>PRIVATE STUDIO / 03</small></span></a>
+      <a className="auth-brand" href="https://yunyuesama.cn"><span className="monogram">Y.</span><span>YUNYUE<small>PRIVATE STUDIO</small></span></a>
       <div className="auth-story-copy"><span className="overline"><Sparkles size={14}/> 把灵感，写成自己的世界</span><h1>故事从这里<br/>继续生长<span>。</span></h1><p>为文字、代码和生活留一盏灯。<br/>无论此刻在哪里，都能回到你的创作间。</p></div>
       <div className="auth-story-foot"><span>神隐之地 · 作者入口</span><span>AI / CODE / MAGIC</span></div>
     </section>
@@ -31,7 +31,7 @@ export function Auth({ session, activationToken, onSession, onLogout }: { sessio
         <h2>{change ? '先换一把新钥匙' : '回到创作间'}</h2>
         <p className="muted">{change ? '首次登录需要修改初始密码，完成后即可开始创作。' : '登录你的管理账号，继续尚未写完的故事。'}</p>
         <form onSubmit={submit} className="auth-form">
-          {!change && <label>管理账号<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} placeholder="输入账号" required autoFocus /></label>}
+          {!change && <label>管理账号<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required autoFocus /></label>}
           <label>{change ? '当前密码' : '密码'}<div className="password-field"><input type={visible ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required/><button type="button" className="icon-button" aria-label={visible ? '隐藏密码' : '显示密码'} onClick={() => setVisible(v => !v)}>{visible ? <EyeOff size={18}/> : <Eye size={18}/>}</button></div></label>
           {change && <><label>新密码<input type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} aria-describedby="password-help" required/></label><p className="field-help" id="password-help">长度与字符由你决定，请使用与当前密码不同的新密码。</p><label>再次输入新密码<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required/></label></>}
           {error && <p className="form-error" role="alert">{error}</p>}

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {gzipSync} from 'node:zlib';
+import {gzipSync,brotliCompressSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {unpackMusicInput,createMusicInputDecoder} from './lib/music-input.mjs';
 import {musicOperation} from './api/music.mjs';
@@ -31,4 +31,13 @@ test('分段计时不改变完整音频校验，不在解析结果中暴露内�
   const timing={};
   const result=await musicOperation({source:'netease',operation:'resolve',script,track:{source:'netease',id:'1'},preference:'320k'},undefined,{timing,request:async()=>({statusCode:206,headers:{'content-range':'bytes 0-4095/4000000'},raw})});
   assert.equal(result.quality,'320 kbps');assert.ok(timing.script>0);assert.ok(timing.media>=0);assert.equal(result.timing,undefined);
+});
+test('新实例可从私有快照直接使用源码引用，快照损坏或哈希不符时允许重新补传',()=>{
+  const script='snapshot source',sha256=createHash('sha256').update(script).digest('hex'),brotli=brotliCompressSync(script).toString('base64');
+  let now=0;const decode=createMusicInputDecoder(()=>now,JSON.stringify({sha256,brotli}));
+  assert.equal(decode({scriptSha256:sha256}).script,script);
+  now+=16*60000;assert.equal(decode({scriptSha256:sha256}).script,script);
+  for(const seed of ['invalid',JSON.stringify({sha256:'a'.repeat(64),brotli}),JSON.stringify({sha256,brotli:brotliCompressSync(Buffer.alloc(256001)).toString('base64')})]){
+    const fallback=createMusicInputDecoder(undefined,seed);assert.throws(()=>fallback({scriptSha256:sha256}),/source_cache_miss/);assert.equal(fallback({script,scriptSha256:sha256}).script,script);
+  }
 });

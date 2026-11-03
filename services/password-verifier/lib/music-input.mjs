@@ -1,9 +1,20 @@
-import {gunzipSync} from 'node:zlib';
+import {gunzipSync,brotliDecompressSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 
 // 内部脚本采用 gzip + Base64 传输；解压上限与原始音源导入上限一致。
-export function createMusicInputDecoder(now=()=>Date.now()){
+export function createMusicInputDecoder(now=()=>Date.now(),snapshot){
  const scripts=new Map();
+ let pinned;
+ // 私有快照只提供源码，不能执行代码；配置失效时仍保留正常补传路径。
+ try{
+   if(typeof snapshot==='string'&&snapshot.length<=60000){
+     const value=JSON.parse(snapshot);
+     if(/^[a-f0-9]{64}$/.test(value.sha256)&&typeof value.brotli==='string'&&/^[A-Za-z0-9+/]+={0,2}$/.test(value.brotli)){
+       const script=brotliDecompressSync(Buffer.from(value.brotli,'base64'),{maxOutputLength:256000}).toString('utf8');
+       if(createHash('sha256').update(script).digest('hex')===value.sha256)pinned={script,hash:value.sha256};
+     }
+   }
+ }catch{}
  return function unpack(input){
   if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('invalid_input');
   const {scriptGzip,scriptSha256,...rest}=input;
@@ -15,8 +26,9 @@ export function createMusicInputDecoder(now=()=>Date.now()){
   }
   if(script===undefined&&scriptSha256){
     const cached=scripts.get(scriptSha256);
-    if(!cached||cached.expiresAt<=now()){scripts.delete(scriptSha256);throw new Error('source_cache_miss');}
-    script=cached.script;
+    if(cached&&cached.expiresAt>now())script=cached.script;
+    else if(pinned?.hash===scriptSha256)script=pinned.script;
+    else{scripts.delete(scriptSha256);throw new Error('source_cache_miss');}
   }
   if(typeof script==='string'){
     if(Buffer.byteLength(script)>256000)throw new Error('invalid_input');
@@ -31,4 +43,4 @@ export function createMusicInputDecoder(now=()=>Date.now()){
   return input;
  };
 }
-export const unpackMusicInput=createMusicInputDecoder();
+export const unpackMusicInput=createMusicInputDecoder(undefined,process.env.MUSIC_SOURCE_SNAPSHOT);

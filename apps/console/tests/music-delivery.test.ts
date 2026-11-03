@@ -8,6 +8,7 @@ import { mockMusicOperation,decodeMusicInput } from './mock-integrations.mjs';
 
 let mf: Miniflare; let db: D1Database;
 let resolutions=0;let manifestRequests=0;let lastResolve:Record<string,unknown>={};
+const resolutionBehaviors=new Map<string,{delay?:number;fail?:boolean;result?:Record<string,unknown>}>();
 const base='https://studio.example.test',secret='c'.repeat(64),csrf='acceptance-csrf',session='a'.repeat(64);
 const audio=new Uint8Array(400000).map((_,i)=>i%251);
 const published={tracks:[{key:'kugou:'+ 'D'.repeat(32),source:'kugou',id:'D'.repeat(32),name:'公开歌曲',artist:'公开作者'}],quality:'320k'};
@@ -15,12 +16,26 @@ const publication={version:1,...published,revision:createHash('sha256').update(J
 function sign(data:object){const ticket=Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600,...data})).toString('base64url');return {ticket,signature:createHmac('sha256',Buffer.from(secret,'hex')).update(ticket).digest('base64url')};}
 const stream=(data:object)=>'/public/music/stream?'+new URLSearchParams(sign({source:'kugou',id:'A'.repeat(32),url:'http://fs.youthandroid2.kugou.com/test.mp3',quality:'320 kbps',size:audio.length,...data}));
 const call=(path:string,method='GET',body?:object,headers:Record<string,string>={})=>mf.dispatchFetch(base+path,{method,headers:{Cookie:`__Host-yunyue-session=${session}`,Origin:base,'Content-Type':'application/json','X-CSRF-Token':csrf,...headers},body:body?JSON.stringify(body):undefined});
+const publicPath=(id:string,preference='320k')=>'/public/music/play?'+new URLSearchParams(sign({action:'play',track:{source:'netease',id},preference}));
+const resolutionKey=(id:string,preference='320k')=>createHash('sha256').update(JSON.stringify(['https://site.example.test',{source:'netease',id},preference,''])).digest('hex');
+const resolutionCount=async()=>Number((await db.prepare("SELECT SUM(count) AS n FROM rate_limits WHERE key LIKE 'public-music-resolution:%'").first<{n:number}>())?.n)||0;
+const cachedRow=(id:string,preference='320k')=>db.prepare('SELECT result_json,expires_at,lease_until,failure_until FROM music_resolutions WHERE cache_key=? ORDER BY source_revision DESC LIMIT 1').bind(resolutionKey(id,preference)).first<{result_json:string|null;expires_at:number;lease_until:number;failure_until:number}>();
 beforeAll(async()=>{
   const bundle=await build({entryPoints:[resolve('worker/index.ts')],bundle:true,write:false,format:'esm',platform:'browser'});
   mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-11-03',d1Databases:['DB'],r2Buckets:['MEDIA'],bindings:{SETTINGS_ENCRYPTION_KEY:secret,MUSIC_DELIVERY_KEY:secret,MUSIC_DELIVERY_BUDGET_BYTES:'2000000',MUSIC_STREAM_ORIGIN:'https://audio.example.test',PASSWORD_SERVICE_URL:'https://internal.test/api/password',PASSWORD_SERVICE_KEY:'test',SITE_URL:'https://site.example.test'},outboundService:async request=>{
     const url=new URL(request.url);
     if(url.hostname==='internal.test'){
-      try{const input=decodeMusicInput(await request.json());if(input.operation==='resolve'){resolutions++;lastResolve=input;}return WorkerResponse.json(await mockMusicOperation(input));}
+      try{
+        const input=decodeMusicInput(await request.json());
+        if(input.operation==='resolve'){
+          resolutions++;lastResolve=input;
+          const behavior=resolutionBehaviors.get(String((input.track as {id?:string}|undefined)?.id||''));
+          if(behavior?.delay)await new Promise(resolve=>setTimeout(resolve,behavior.delay));
+          if(behavior?.fail)return WorkerResponse.json({error:'upstream_failed'},{status:502});
+          return WorkerResponse.json({...await mockMusicOperation(input),...behavior?.result});
+        }
+        return WorkerResponse.json(await mockMusicOperation(input));
+      }
       catch(error){if(error instanceof Error&&error.message==='source_cache_miss')return WorkerResponse.json({error:'source_cache_miss'},{status:409});throw error;}
     }
     if(url.hostname==='site.example.test'&&url.pathname==='/music-catalog.json'){manifestRequests++;return WorkerResponse.json(publication);}
@@ -119,6 +134,50 @@ describe.sequential('音乐连接、加密设置与边缘传输',()=>{
     expect((await mf.dispatchFetch(base+path.replace('track=kugou%3A'+ 'D'.repeat(32),'track=kugou%3A'+ 'E'.repeat(32)),{redirect:'manual'})).status).toBe(403);
     expect(resolutions).toBe(before);expect(manifestRequests).toBe(1);
   });
+  it('同曲多请求只取源一次且只计一次额度，后续请求读取共享数据库地址',async()=>{
+    const id='100301',path=publicPath(id)+'&prepare=true',before=resolutions,used=await resolutionCount();
+    resolutionBehaviors.set(id,{delay:350});
+    const responses=await Promise.all(Array.from({length:4},()=>mf.dispatchFetch(base+path)));
+    for(const response of responses)expect(response.status,await response.clone().text()).toBe(200);
+    expect(responses.map(r=>r.headers.get('x-music-resolution'))).toContain('fresh');
+    expect(responses.map(r=>r.headers.get('x-music-resolution'))).toContain('waiting');
+    expect(resolutions-before).toBe(1);expect(await resolutionCount()-used).toBe(1);
+    await expect.poll(async()=>(await cachedRow(id))?.lease_until).toBe(0);
+    // 直接更新 D1 结果证明新请求使用共享数据库，不能依赖某个节点的内存或 Cache API。
+    await db.prepare("UPDATE music_resolutions SET result_json=json_set(result_json,'$.adapter','shared-proof') WHERE cache_key=?").bind(resolutionKey(id)).run();
+    const response=await call('/public/music/resolve','POST',sign({action:'resolve',track:{source:'netease',id},preference:'320k'}));
+    expect(response.status).toBe(200);expect(response.headers.get('x-music-resolution')).toBe('shared');
+    expect((await response.json() as {adapter:string}).adapter).toBe('shared-proof');expect(resolutions-before).toBe(1);
+    resolutionBehaviors.delete(id);
+  });
+  it('临近过期或损坏的共享地址会重新解析，不能重用非法地址',async()=>{
+    const id='100302',path=publicPath(id)+'&prepare=true';
+    expect((await mf.dispatchFetch(base+path)).status).toBe(200);
+    await expect.poll(async()=>(await cachedRow(id))?.expires_at||0).toBeGreaterThan(Date.now());
+    const before=resolutions;
+    await db.prepare('UPDATE music_resolutions SET expires_at=? WHERE cache_key=?').bind(Date.now()+4000,resolutionKey(id)).run();
+    expect((await mf.dispatchFetch(base+path)).status).toBe(200);expect(resolutions-before).toBe(1);
+    await expect.poll(async()=>(await cachedRow(id))?.expires_at||0).toBeGreaterThan(Date.now()+5000);
+    await db.prepare('UPDATE music_resolutions SET result_json=?,expires_at=? WHERE cache_key=?').bind(JSON.stringify({url:'https://127.0.0.1/private',quality:'320 kbps',mime:'audio/mpeg',size:400000}),Date.now()+600000,resolutionKey(id)).run();
+    const result=await mf.dispatchFetch(base+path);expect(result.status).toBe(200);
+    expect((await result.json() as {url:string}).url).toMatch(/^https:\/\/m1\.music\.126\.net/);expect(resolutions-before).toBe(2);
+  });
+  it('同曲上游失败让并发等待者退出，冷却期间不接力重放取源',async()=>{
+    const id='100303',path=publicPath(id)+'&prepare=true',before=resolutions;
+    resolutionBehaviors.set(id,{delay:350,fail:true});
+    const responses=await Promise.all(Array.from({length:3},()=>mf.dispatchFetch(base+path)));
+    expect(responses.map(r=>r.status)).toEqual([502,502,502]);expect(resolutions-before).toBe(1);
+    expect((await mf.dispatchFetch(base+path)).status).toBe(502);expect(resolutions-before).toBe(1);
+    resolutionBehaviors.delete(id);
+    await db.prepare('UPDATE music_resolutions SET failure_until=0 WHERE cache_key=?').bind(resolutionKey(id)).run();
+    expect((await mf.dispatchFetch(base+path)).status).toBe(200);expect(resolutions-before).toBe(2);
+  });
+  it('降级音质共享地址最多保留一分钟',async()=>{
+    const id='100304',now=Date.now(),response=await mf.dispatchFetch(base+publicPath(id,'lossless')+'&prepare=true');
+    expect(response.status).toBe(200);
+    const result=await response.json() as {expiresAt:number};
+    expect(result.expiresAt).toBeGreaterThan(now+50000);expect(result.expiresAt).toBeLessThanOrEqual(Date.now()+60000);
+  });
   it('MP3/FLAC 正文及 Range 字节保持一致，HEAD 不计字节预留',async()=>{
     await db.prepare("DELETE FROM rate_limits WHERE key LIKE 'delivery-bytes:%'").run();
     const head=await call(stream({}),'HEAD');expect(head.status,await head.clone().text()).toBe(200);expect(await head.text()).toBe('');
@@ -140,12 +199,18 @@ describe.sequential('音乐连接、加密设置与边缘传输',()=>{
     const result=await mf.dispatchFetch(base+'/api/integrations/imagebed/upload',{method:'POST',headers:{Cookie:`__Host-yunyue-session=${session}`,Origin:base,'X-CSRF-Token':csrf,'Content-Type':'image/png'},body:new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0])});expect(result.status,await result.clone().text()).toBe(201);expect((await result.json() as {url:string}).url).toBe('https://tu.yunyuesama.cn/file/test.webp');
   });
   it('有效平台也必须由当前音源声明，换源后旧渠道不可继续检索',async()=>{
+    const playback=publicPath('100305')+'&prepare=true';
+    expect((await mf.dispatchFetch(base+playback)).status).toBe(200);const before=resolutions;
     const state=await(await call('/api/integrations/music/source')).json() as {revision:number};const r=state.revision;
     expect((await call('/api/integrations/music/source/import','POST',{revision:r,script:'/** @name 单渠道 */ SINGLE_CHANNEL'})).status).toBe(200);
     expect((await call('/api/integrations/music/source/test','POST',{revision:r+1,track:{source:'netease',id:'123'}})).status).toBe(200);
     expect((await call('/api/integrations/music/source/activate','POST',{revision:r+2})).status).toBe(200);
     expect((await call('/api/integrations/music/search','POST',{channel:'qq',query:'有效但未声明渠道'})).status).toBe(400);
     expect((await call('/api/integrations/music/search','POST',{channel:'netease',query:'有效关键词'})).status).toBe(200);
+    const updated=await mf.dispatchFetch(base+playback);expect(updated.status).toBe(200);expect(updated.headers.get('x-music-resolution')).toBe('fresh');expect(resolutions-before).toBe(2);
+    const current=await(await call('/api/integrations/music/source')).json() as {revision:number};
+    expect((await call('/api/integrations/music/source/disable','POST',{revision:current.revision})).status).toBe(200);
+    const disabled=await mf.dispatchFetch(base+playback);expect(disabled.status).toBe(503);expect(resolutions-before).toBe(2);
   });
 
 });

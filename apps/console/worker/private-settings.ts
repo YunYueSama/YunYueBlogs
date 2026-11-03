@@ -8,6 +8,9 @@ async function key(env:Env){
 }
 export async function readPrivate<T>(env:Env,name:string):Promise<{value:T;revision:number}|null>{
   const row=await env.DB.prepare('SELECT ciphertext,revision FROM private_settings WHERE name=?').bind(name).first<PrivateRow>();
+  return decodePrivate<T>(env,name,row);
+}
+export async function decodePrivate<T>(env:Env,name:string,row:PrivateRow|null):Promise<{value:T;revision:number}|null>{
   if(!row)return null;
   try{const bytes=Uint8Array.from(atob(row.ciphertext),c=>c.charCodeAt(0));const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes.slice(0,12),additionalData:new TextEncoder().encode(name)},await key(env),bytes.slice(12));return {value:JSON.parse(new TextDecoder().decode(plain)) as T,revision:row.revision};}
   catch{throw new HttpError(503,'服务端凭据无法解密，请核对部署的加密密钥。','decryption_unavailable');}

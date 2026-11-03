@@ -46,5 +46,6 @@ export default {
     ctx.waitUntil(runPending(env));
     ctx.waitUntil(env.DB.prepare('DELETE FROM rate_limits WHERE expires_at<?').bind(Math.floor(Date.now() / 1000)).run());
     ctx.waitUntil(env.DB.prepare('DELETE FROM sessions WHERE expires_at<? OR last_seen<?').bind(Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000) - 1800).run());
+    ctx.waitUntil(env.DB.prepare('DELETE FROM music_resolutions WHERE expires_at<=? AND lease_until<=? AND failure_until<=?').bind(Date.now(),Date.now(),Date.now()).run());
   },
 } satisfies ExportedHandler<Env>;

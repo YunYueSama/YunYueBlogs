@@ -91,6 +91,22 @@ describe.sequential('音乐连接、加密设置与边缘传输',()=>{
     expect(result.status).toBe(503);expect(resolutions).toBe(before);
     expect(await result.text()).toContain('稍后刷新音源');
   });
+  it('预备播放只返回小型地址 JSON，缓存命中不消耗远程取源额度，刷新可重新取源',async()=>{
+    const path='/public/music/play?'+new URLSearchParams(sign({action:'play',track:{source:'netease',id:'987654'},preference:'320k'}));
+    const before=resolutions;
+    const response=await mf.dispatchFetch(base+path+'&prepare=true');
+    expect(response.status).toBe(200);expect(response.headers.get('access-control-allow-origin')).toBe('https://site.example.test');
+    const prepared=await response.json() as {url:string;expiresAt:number};
+    expect(prepared.url).toMatch(/^https:\/\/m1\.music\.126\.net/);expect(prepared.expiresAt).toBeGreaterThan(Date.now()+100000);
+    const count=async()=>Number((await db.prepare("SELECT SUM(count) AS n FROM rate_limits WHERE key LIKE 'public-music-resolution:%'").first<{n:number}>())?.n);
+    const used=await count();
+    expect((await mf.dispatchFetch(base+path,{redirect:'manual'})).status).toBe(307);
+    expect(resolutions-before).toBe(1);expect(await count()).toBe(used);
+    const renewed=path+'&renewal='+Date.now();
+    expect((await mf.dispatchFetch(base+renewed,{redirect:'manual'})).status).toBe(307);
+    expect(resolutions-before).toBe(2);
+    expect((await mf.dispatchFetch(base+renewed,{redirect:'manual'})).status).toBe(307);expect(resolutions-before).toBe(2);
+  });
   it('静态歌单仅允许正式清单中的曲目，音质与元数据不信任浏览器',async()=>{
     const path='/public/music/play?'+new URLSearchParams({catalog:publication.revision,track:published.tracks[0].key,quality:'lossless',name:'伪造歌曲'});
     const response=await mf.dispatchFetch(base+path,{redirect:'manual'});expect(response.status,await response.clone().text()).toBe(307);

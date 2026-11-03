@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
     entrypoint,
     assets: { notFoundHandling: 'single-page-application', runWorkerFirst: ['/api/*','/public/music/*'] },
     env: {
-      DB: bindings.d1({ name: mode === 'production' ? 'yunyue-console' : 'yunyue-console-staging' }),
+      DB: bindings.d1({ name: mode === 'production' ? 'yunyue-console' : 'yunyue-console-staging', ...(process.env.D1_DATABASE_ID ? { id: process.env.D1_DATABASE_ID } : {}) }),
       ...(process.env.ENABLE_PRIVATE_MEDIA === '1' ? { MEDIA: bindings.r2({ name: mode === 'production' ? 'yunyue-private-media' : 'yunyue-private-media-staging' }) } : {}),
       PASSWORD_SERVICE_URL: bindings.text(process.env.PASSWORD_SERVICE_URL || ''),
       PASSWORD_SERVICE_KEY: bindings.secret(),

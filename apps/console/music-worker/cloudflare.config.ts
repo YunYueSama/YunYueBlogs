@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
     compatibilityDate: '2026-11-03',
     entrypoint,
     env: {
-      DB: bindings.d1({ name: mode === 'production' ? 'yunyue-console' : 'yunyue-console-staging' }),
+      DB: bindings.d1({ name: mode === 'production' ? 'yunyue-console' : 'yunyue-console-staging', ...(process.env.D1_DATABASE_ID ? { id: process.env.D1_DATABASE_ID } : {}) }),
       MUSIC_DELIVERY_KEY: bindings.secret(),
       MUSIC_DELIVERY_BUDGET_BYTES: bindings.text(process.env.MUSIC_DELIVERY_BUDGET_BYTES || '0'),
       SITE_URL: bindings.text('https://yunyuesama.cn'),

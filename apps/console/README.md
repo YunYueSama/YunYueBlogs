@@ -34,6 +34,7 @@ npm.cmd run build
 | 名称 | 用途 |
 | --- | --- |
 | `DB` | D1 文稿、修订、账号、会话与发布记录 |
+| `D1_DATABASE_ID` | 构建、部署时提供已有 D1 的 UUID，关闭自动建库时必须填写 |
 | `MEDIA` | 可选私有 R2 素材，默认不绑定 |
 | `PASSWORD_SERVICE_URL` | Node 服务的 `/api/password` 完整 HTTPS 地址；音乐接口使用同 origin 的 `/api/music` |
 | `PASSWORD_SERVICE_KEY` | Node 与管理 Worker 的内部共享密钥 |

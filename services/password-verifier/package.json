@@ -9,7 +9,7 @@
     "pretest": "npm run build"
   },
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "dependencies": {
     "@neteasecloudmusicapienhanced/api": "4.41.1",

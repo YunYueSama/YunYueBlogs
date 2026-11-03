@@ -12,6 +12,8 @@ React / Vite 在线管理端，Cloudflare Worker 处理鉴权、内容与发布�
 
 播放音质只由站长配置，保存并发布后对博客生效。右侧播放器与歌单共用音频实例；两个页面均设置 no-referrer，避免媒体 CDN 因来源校验返回 403。
 
+公开播放使用短期 HMAC 入口 `GET /public/music/play`：签名校验和取源完成后仅返回 307，音频继续由原站或独立音频 Worker 传输。`warm=true` 仅解析当前歌曲并返回 204，不下载音频；与同一首歌的同时播放请求合并。原有 `POST /public/music/resolve` 继续供控制台试听等内部调用。博客不显示音质数值，默认品质仍由站长统一维护。
+
 ## 开发与验证
 
 使用 `package.json` engines 指定的 Node 版本：

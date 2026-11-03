@@ -7,6 +7,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { mockMusicOperation } from './mock-integrations.mjs';
 
 let mf: Miniflare; let db: D1Database;
+let resolutions=0;
 const base='https://studio.example.test',secret='c'.repeat(64),csrf='acceptance-csrf',session='a'.repeat(64);
 const audio=new Uint8Array(400000).map((_,i)=>i%251);
 function sign(data:object){const ticket=Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600,...data})).toString('base64url');return {ticket,signature:createHmac('sha256',Buffer.from(secret,'hex')).update(ticket).digest('base64url')};}
@@ -16,7 +17,7 @@ beforeAll(async()=>{
   const bundle=await build({entryPoints:[resolve('worker/index.ts')],bundle:true,write:false,format:'esm',platform:'browser'});
   mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-11-03',d1Databases:['DB'],r2Buckets:['MEDIA'],bindings:{SETTINGS_ENCRYPTION_KEY:secret,MUSIC_DELIVERY_KEY:secret,MUSIC_DELIVERY_BUDGET_BYTES:'2000000',MUSIC_STREAM_ORIGIN:'https://audio.example.test',PASSWORD_SERVICE_URL:'https://internal.test/api/password',PASSWORD_SERVICE_KEY:'test',SITE_URL:'https://site.example.test'},outboundService:async request=>{
     const url=new URL(request.url);
-    if(url.hostname==='internal.test')return WorkerResponse.json(await mockMusicOperation(await request.json()));
+    if(url.hostname==='internal.test'){const input=await request.json() as {operation:string};if(input.operation==='resolve')resolutions++;return WorkerResponse.json(await mockMusicOperation(input));}
     if(url.hostname==='tu.yunyuesama.cn')return WorkerResponse.json([{src:'/file/test.webp'}]);
     if(url.hostname==='fs.youthandroid2.kugou.com'){
       const range=request.headers.get('range')?.match(/^bytes=(\d+)-(\d+)$/);const start=range?Number(range[1]):0,end=range?Number(range[2]):audio.length-1;
@@ -66,6 +67,20 @@ describe.sequential('音乐连接、加密设置与边缘传输',()=>{
     expect((await call(stream({exp:1}))).status).toBe(403);
     expect((await call(stream({url:'http://127.0.0.1/'}))).status).toBe(403);
     expect((await call(stream({}), 'GET',undefined,{Range:'bytes=0-1,4-5'})).status).toBe(416);
+  });
+  it('首次播放入口验证签名后仅跳转，音频正文不进入管理服务或 Vercel',async()=>{
+    const path='/public/music/play?'+new URLSearchParams(sign({action:'play',track:{source:'kugou',id:'A'.repeat(32)},preference:'320k'}));
+    const response=await mf.dispatchFetch(base+path,{redirect:'manual'});expect(response.status,await response.clone().text()).toBe(307);expect(response.headers.get('location')).toMatch(/^https:/);expect(await response.text()).toBe('');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect((await call(path.replace(/signature=[^&]+/,'signature=forged'))).status).toBe(403);
+    expect((await call('/public/music/play?'+new URLSearchParams(sign({action:'resolve',track:{source:'kugou',id:'A'.repeat(32)},preference:'320k'})))).status).toBe(403);
+    expect((await call(path,'POST')).status).toBe(405);
+  });
+  it('当前歌曲预解析不下载音频，并与同时发生的播放共享取源',async()=>{
+    const path='/public/music/play?'+new URLSearchParams(sign({action:'play',track:{source:'kugou',id:'B'.repeat(32)},preference:'320k'}));
+    const before=resolutions;
+    const [warm,play]=await Promise.all([mf.dispatchFetch(base+path+'&warm=true',{redirect:'manual'}),mf.dispatchFetch(base+path,{redirect:'manual'})]);
+    expect(warm.status).toBe(204);expect(await warm.text()).toBe('');expect(play.status).toBe(307);expect(resolutions-before).toBe(1);
   });
   it('MP3/FLAC 正文及 Range 字节保持一致，HEAD 不计字节预留',async()=>{
     await db.prepare("DELETE FROM rate_limits WHERE key LIKE 'delivery-bytes:%'").run();

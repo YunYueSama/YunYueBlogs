@@ -1,16 +1,18 @@
 import {validMusicId} from '../src/music-channels';
-import {HttpError,json,readJson} from './http';
+import {HttpError,json,readJson,readBounded} from './http';
 import {limit} from './auth';
 import {readPrivate} from './private-settings';
 import {musicService} from './integrations';
 import {verifyMusicTicket,issueMusicTicket,allowedMediaHost} from './music-delivery';
 import type {ResolvedMusic,SourceState} from './music-sources';
+const pending=new Map<string,Promise<ResolvedMusic>>();
 
 export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionContext,path:string):Promise<Response|undefined>{
-  if(path!=='/public/music/resolve')return;
-  if(request.method!=='POST')throw new HttpError(405,'请求方式不正确。');
-  const input=await readJson(request,12000);const data=await verifyMusicTicket(env,String(input.ticket||''),String(input.signature||'')) as {action?:string;track?:{source:string;id:string};preference?:string;exp:number};
-  const track=data.track;if(data.action!=='resolve'||!track||!validMusicId(track.source,track.id))throw new HttpError(403,'歌曲请求无效。');
+  const play=path==='/public/music/play';
+  if(!play&&path!=='/public/music/resolve')return;
+  if(play?!['GET','HEAD'].includes(request.method):request.method!=='POST')throw new HttpError(405,'请求方式不正确。');
+  const input=play?Object.fromEntries(new URL(request.url).searchParams):await readJson(request,12000);const data=await verifyMusicTicket(env,String(input.ticket||''),String(input.signature||'')) as {action?:string;track?:{source:string;id:string};preference?:string;exp:number};
+  const track=data.track;if(data.action!==(play?'play':'resolve')||!track||!validMusicId(track.source,track.id))throw new HttpError(403,'歌曲请求无效。');
   await limit(env,'public-music-resolution',180,60);
   const source=await readPrivate<SourceState>(env,'music-source');
   const version=JSON.stringify([track,data.preference,source?.revision||0]);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(version)))).map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -19,10 +21,35 @@ export async function publicMusicRoute(request:Request,env:Env,ctx:ExecutionCont
   if(!resolved){
     const custom=source?.value.enabled&&source.value.active;
     if(!custom)throw new HttpError(503,'音乐音源尚未就绪，请稍后重试。');
-    resolved=await musicService<ResolvedMusic>(env,{source:track.source,operation:'resolve',track,preference:data.preference,script:custom.script});
+    let current=pending.get(hash);
+    if(!current){
+      if(pending.size>=32)throw new HttpError(503,'播放服务繁忙，请稍后重试。');
+      current=musicService<ResolvedMusic>(env,{source:track.source,operation:'resolve',track,preference:data.preference,script:custom.script});
+      pending.set(hash,current);
+    }
+    try{resolved=await current;}finally{if(pending.get(hash)===current)pending.delete(hash);}
     ctx.waitUntil(cache.put(key,new Response(JSON.stringify(resolved),{headers:{'Content-Type':'application/json','Cache-Control':'public, max-age=60'}})));
   }
-  return playbackResponse(request,env,track,resolved);
+  const response=await playbackResponse(request,env,track,resolved);
+  if(!play)return response;
+  const result=await response.json<{url:string}>();
+  if(new URL(request.url).searchParams.get('warm')==='true')return new Response(null,{status:204,headers:{'Cache-Control':'private, no-store','Access-Control-Allow-Origin':env.SITE_URL,Vary:'Origin'}});
+  if(new URL(request.url).searchParams.get('status')==='true'){
+    const stream=new URL(result.url);
+    if(stream.origin===env.MUSIC_STREAM_ORIGIN&&stream.pathname==='/public/music/stream'){
+      stream.searchParams.set('status','true');
+      const check=await fetch(stream,{signal:AbortSignal.timeout(2500)});
+      const payload=await readJsonResponse(check);
+      return json(payload,check.status,{'Access-Control-Allow-Origin':env.SITE_URL,Vary:'Origin'});
+    }
+    return json({available:true},200,{'Access-Control-Allow-Origin':env.SITE_URL,Vary:'Origin'});
+  }
+  return new Response(null,{status:307,headers:{Location:result.url,'Cache-Control':'private, no-store','Access-Control-Allow-Origin':env.SITE_URL,Vary:'Origin','Referrer-Policy':'no-referrer'}});
+}
+
+async function readJsonResponse(response:Response){
+  const bytes=await readBounded(response,8000);
+  try{return JSON.parse(new TextDecoder().decode(bytes));}catch{throw new HttpError(502,'播放服务暂时无法连接。');}
 }
 
 export async function playbackResponse(request:Request,env:Env,track:{source:string;id:string},resolved:ResolvedMusic){

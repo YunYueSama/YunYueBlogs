@@ -31,11 +31,12 @@ export async function inspectMedia(raw,source,durationMs=0,request=publicRequest
 }
 
 let activeResolutions=0;
-export async function resolveCustom(input,catalog,request=publicRequest){
+export async function resolveCustom(input,catalog,request=publicRequest,timing){
   if(activeResolutions>=2)throw new Error('source_busy');
-  activeResolutions++;try{return await resolveCustomWork(input,catalog,request);}finally{activeResolutions--;}
+  activeResolutions++;try{return await resolveCustomWork(input,catalog,request,timing);}finally{activeResolutions--;}
 }
-async function resolveCustomWork(input,catalog,request){
+async function resolveCustomWork(input,catalog,request,timing){
+  const measure=async(name,work)=>{const started=performance.now();try{return await work();}finally{if(timing)timing[name]=(timing[name]||0)+performance.now()-started;}};
   const meta=sourceMetadata(input.script);const source=channels[input.track.source]?.lx,track=input.track;
   const goods=catalog?.relate_goods||[];const types=goods.flatMap(row=>['128','320','flac'].includes(row.quality)&&row.hash?[{type:row.quality==='flac'?'flac':row.quality+'k',hash:row.hash,size:String(row.info?.filesize||'')}]:[]);
   const info={...(track.lx||{}),name:track.name||catalog?.name||'',singer:track.artist||catalog?.singername||'',source,...(source==='kg'?{hash:track.id}:{}),songmid:source==='wy'?track.id:String(track.lx?.songmid||catalog?.id||track.albumAudioId||track.id),albumAudioId:String(catalog?.album_audio_id||track.albumAudioId||''),albumId:String(catalog?.album_id||track.albumId||track.lx?.albumMid||''),albumName:track.album||catalog?.albumname||'',types:types.length?types:track.lx?.types||[],_types:types.length?Object.fromEntries(types.map(row=>[row.type,row])):track.lx?._types||{},typeUrl:{},img:track.cover||'',interval:`${Math.floor(Number(track.durationMs||0)/60000).toString().padStart(2,'0')}:${Math.floor(Number(track.durationMs||0)/1000%60).toString().padStart(2,'0')}`,_interval:Number(catalog?.info?.duration||track.durationMs||0)/1000};
@@ -45,9 +46,9 @@ async function resolveCustomWork(input,catalog,request){
     if(Date.now()>deadline-1000)break;
     let phase='script';
     try{
-      const parsed=await resolveLx(input.script,info,quality,request,Math.max(500,deadline-Date.now()-4000),track.source==='qq'?8000:1500);
+      const parsed=await measure('script',()=>resolveLx(input.script,info,quality,request,Math.max(500,deadline-Date.now()-4000),track.source==='qq'?8000:1500));
       phase='media';
-      const result=await inspectMedia(parsed.url,track.source,Number(catalog?.info?.duration||track.durationMs||0),request);
+      const result=await measure('media',()=>inspectMedia(parsed.url,track.source,Number(catalog?.info?.duration||track.durationMs||0),request));
       if(result.mime==='audio/flac'&&input.preference!=='lossless')continue;
       return {...result,adapter:meta.name};
     }catch(error){

@@ -1,0 +1,9 @@
+{
+  "name": "yunyue-music-delivery",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.9",
+    "vite": "^7.2.0"
+  }
+}

@@ -79,3 +79,18 @@ venv/
 
 /picture/
 /.release/
+/.cloudflare/
+
+# 云端控制台与独立密码计算服务
+apps/**/node_modules/
+apps/**/dist/
+apps/**/.cloudflare/
+apps/**/.wrangler/
+apps/**/.dev.vars*
+apps/**/.vercel/
+apps/**/test-results/
+apps/**/playwright-report/
+services/**/node_modules/
+services/**/.vercel/
+
+services/**/generated/

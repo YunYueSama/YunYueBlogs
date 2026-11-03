@@ -1,0 +1,9 @@
+export const kinds = ['post', 'chatter', 'moment', 'page', 'projects', 'albums', 'friends', 'site', 'music'] as const;
+export type DocumentKind = typeof kinds[number];
+export const kindLabels: Record<DocumentKind, string> = { post: '文章', chatter: '长随笔', moment: '日常片刻', page: '独立页面', projects: '作品', albums: '相册', friends: '友链', site: '站点配置', music: '歌词配置' };
+export type Metadata = { date?: string; description?: string; tags?: string[]; cover?: string; mood?: string; location?: string; images?: string[]; [key: string]: unknown };
+export type ContentDocument = { id: string; kind: DocumentKind; slug: string; title: string; body: string; metadata: Metadata; publish: boolean; archived: boolean; revision: number; createdAt: string; updatedAt: string };
+export type DocumentSummary = Omit<ContentDocument, 'body'> & { excerpt?: string };
+export type Session = { username: string; mustChangePassword: boolean; csrfToken: string };
+export type Release = { id: string; state: string; snapshotHash: string; commitSha?: string; deploymentUrl?: string; error?: string; createdAt: string; updatedAt: string };
+export const releaseLabels: Record<string, string> = { queued: '等待发布', exporting: '准备公开快照', building: '正在构建', verifying: '核验候选版本', promoting: '切换正式版本', released: '已上线', failed: '发布失败' };

@@ -1,198 +1,104 @@
-# YunYueBlogs · 云月博客管理端
+<div align="center">
 
-**Ai·Code·Magic** — 为个人博客准备的本地桌面控制台，负责创作、音乐、图床与安全发布。
+# 云月的创作间 · YunYueBlogs
 
-[访问博客](https://yunyuesama.cn) · [公开站源码](https://github.com/YunYueSama/YunYueBlog) · [English](README_en.md) · [技术文档](docs/README.md)
+**把日常写成文字，把喜欢留在自己的站点。**
 
-![管理端概览](.github/readme/console-overview.png)
+[逛逛博客](https://yunyuesama.cn) · [公开博客源码](https://github.com/YunYueSama/YunYueBlog) · [English](README_en.md)
 
-## 两个仓库，各司其职
+</div>
 
-| 工程 | 职责 | 技术 |
-| --- | --- | --- |
-| 本仓库的 `my-blog-manager` | 本机编辑、账号配置、差异预览、同步与提交 | Next.js 16、React 19、FastAPI、pywebview |
-| 独立仓库 `YunYueBlog` | 访客访问的公开博客与服务端接口 | Astro 7、React Islands、Tailwind CSS 4、Vercel |
+这是我的个人博客配套创作系统，也分享给喜欢折腾个人网站的朋友。浏览器里写作、管理歌单和图片，发布后交给静态博客展示；换一台电脑或拿起手机，也能继续编辑。
 
-公开内容以连接的**远程博客仓库**为同步基准。各设备需要连接同一仓库；未发布修改、私密草稿和账号凭据留在本机。公开网站是已部署的快照，保存本地草稿不会自动改变线上内容。
+公开站与创作间有各自的界面：博客强调阅读、音乐和角色场景，控制台围绕文稿与配置组织工作。两边通过公开快照连接，私密草稿和集成密钥留在服务端。
 
-## 控制台能做什么
+## 可以做什么
 
-- **内容创作**：管理文章、杂谈与说说，支持富文本、Markdown 和媒体插入。
-- **资源管理**：图床上传、相册、项目与友链配置。
-- **音乐**：网易云与酷狗账号登录、歌曲搜索、公开歌单、音源检查与歌词；账号权益受平台实际返回结果约束。
-- **外观与 Robin**：配置站点外观、Bangumi 和 Robin API Key。Robin 固定使用 DeepSeek-V4.1-Flash，接口模型标识为 `deepseek-flash`。
-- **安全发布**：服务器内容刷新、差异预览、同步计划、后台任务队列和 Git 提交推送。文章 Giscus/Gitalk 评论功能已移除。
+- **在线写作**：单站长账号、首次改密、Markdown 预览、自动保存、修订冲突提示、断网草稿恢复与导出。
+- **整理自己的小站**：文章与生活动态、相册、作品、友链、站点外观、Bangumi ACG 书架。
+- **收藏音乐**：自定义 LX 兼容音源、五渠道关键词检索、歌单排序、自动歌词、右侧试听播放器；音质由站长统一配置。
+- **图片管理**：连接自己的公开图床、上传记录、编辑器选图；私有 R2 素材为可选功能。
+- **明确的发布状态**：草稿保存后可继续修改，正式发布生成不可变公开快照，由 GitHub / Vercel 构建，正式站核验通过后显示上线。
+- **轻盈的交互**：局部玻璃、场景视差、原生 View Transition 与短时淡入；小屏和减少动态效果偏好有对应处理。
 
-![发布页：先检查差异，再同步与推送](.github/readme/console-publish.png)
+## 仓库怎么分
 
-## 从第一次启动到第一次发布
-
-Windows 用户也可以使用 [安装包](https://github.com/YunYueSama/YunYueBlogs/releases/latest)。安装版自带运行环境，首次打开后通过 GitHub 官方授权，选择“连接已有博客”或“创建自己的博客”。连接现有仓库会继续使用原来的 Vercel 项目；新建博客会创建自己的私有仓库，再由你在 Vercel 导入上线。安装包不包含作者的工作区、草稿、登录文件和密钥。
-
-安装版的个人数据保存在 `%LOCALAPPDATA%\YunYueManager\workspace`，程序更新和卸载会保留此目录。换设备时重新授权账号；未发布草稿仍需单独迁移。详细说明见 [Windows 安装与发布说明](my-blog-manager/docs/windows-release.md)。下面保留源码安装流程。
-
-**管理端在自己的 Windows 电脑运行，公开博客部署到 Vercel。** 推荐先让博客上线，再连接管理端；下面各步骤可以单独展开。博客首次上线的图文介绍见[博客 README](https://github.com/YunYueSama/YunYueBlog#想自己搭一个也欢迎)。
-
-<details>
-<summary><strong>① 准备工具和两个仓库</strong></summary>
-
-安装 [Git for Windows](https://git-scm.com/downloads/win)、[Node.js](https://nodejs.org/) **22.12+** 和 [Python](https://www.python.org/downloads/windows/) **3.10+**（例如 3.12）。Python 安装时启用 PATH 或 Python Launcher，安装后重新打开 PowerShell：
-
-```powershell
-git --version
-node --version
-npm.cmd --version
-py -3 --version
-```
-
-`py` 不可用时检查 `python --version`，后续 Python 命令使用实际可用且版本符合要求的解释器。
-
-在 GitHub 为两个工程准备自己有权限的仓库：博客仓库需要可推送并授权 Vercel 访问；管理端仓库用于本机控制台。可以 Fork，或从有权访问的源码创建自己的副本。未登录或仓库权限不足时，GitHub 可能显示 404。
-
-以下示例中的 `你的用户名` 要先替换，路径也可按自己的电脑调整：
-
-```powershell
-New-Item -ItemType Directory -Force D:\Projects
-Set-Location D:\Projects
-git clone https://github.com/你的用户名/YunYueBlogs.git YunYueBlogs
-Set-Location YunYueBlogs
-git clone https://github.com/你的用户名/YunYueBlog.git YunYueBlog
-```
-
-得到下面的结构。内层博客是独立 Git 仓库，已被外层仓库忽略，不要把它作为管理端文件再次上传：
-
-```text
-D:\Projects\YunYueBlogs/
-├─ my-blog-manager/      本机控制台
-└─ YunYueBlog/           Astro 博客仓库
-```
-
-首次提交前配置自己的 Git 姓名和公开邮箱（可用 GitHub noreply 邮箱）。推送时通过 Git Credential Manager 的浏览器授权登录，不把 Token 拼进 URL。先按[博客搭建教程](https://github.com/YunYueSama/YunYueBlog#想自己搭一个也欢迎)完成个性化、首次 Vercel 部署，并提交所有准备修改，让博客仓库保持干净。
-
-</details>
-
-<details>
-<summary><strong>② 安装并打开桌面管理端</strong></summary>
-
-在上一步创建的目录中执行：
-
-```powershell
-Set-Location D:\Projects\YunYueBlogs\my-blog-manager
-npm.cmd ci
-py -3 -m pip install -r requirements.txt
-.\Start.bat
-```
-
-只有 `python` 命令时，将安装命令换成 `python -m pip install -r requirements.txt`，确保与启动器使用同一个 Python 环境。
-
-首次启动会检查依赖、准备本机音乐网关并构建桌面前端，可能需要几分钟。等桌面窗口出现并能打开“概览”“文章”“发布”，就完成了启动。后续可直接双击 `my-blog-manager/Start.bat`。
-
-启动器自动选择本机端口并生成被忽略的 `public/backend_config.json`，桌面模式不用手工填写端口。关闭管理窗口会清理它启动的服务进程。管理端仅监听本机，不要将它直接作为公网管理后台部署。
-
-打不开时，先在 PowerShell 执行上述启动命令看错误：检查 Python 版本、Node 和 npm 是否可用，以及 npm / GitHub 网络。不要通过上传依赖目录或构建文件来解决安装失败。纯浏览器开发方式见[运维指南](docs/部署与运维指南.md)。
-
-</details>
-
-<details>
-<summary><strong>③ 首次连接：先读取服务器内容，再开始编辑</strong></summary>
-
-进入管理端“发布”，填写以下配置：
-
-| 字段 | 首次示例 / 含义 |
+| 位置 | 职责 |
 | --- | --- |
-| 本地博客仓库 | `D:\Projects\YunYueBlogs\YunYueBlog`，必须是 Astro 仓库根目录 |
-| Remote | 通常 `origin`，对应自己的远程博客仓库 |
-| 分支 | 通常 `main`，与 Vercel Production Branch 一致 |
-| Vercel 项目地址（可选） | 自己的 `https://vercel.com/团队/项目`，用于打开部署页面 |
+| [YunYueBlog](https://github.com/YunYueSama/YunYueBlog)（独立仓库） | Astro 7 / React 19 公开站，静态页面与少量动态 API |
+| [`apps/console`](apps/console) | React / Vite 创作间，Cloudflare Worker API 与 D1 |
+| [`apps/console/music-worker`](apps/console/music-worker) | 独立 Cloudflare 音频传输服务 |
+| [`services/password-verifier`](services/password-verifier) | Node scrypt 与隔离的音乐脚本解析，可部署于 Vercel |
+| [`my-blog-manager`](my-blog-manager) | 保留的旧版 Windows 本地管理端（Next.js / FastAPI） |
+| [`docs`](docs/README.md) | 自建、架构与设计资料 |
 
-**点击“检查状态”会保存发布配置并检查仓库。** 随后“刷新远程”，若落后且工作区干净，执行“安全更新本地”。路径不要填网页 URL、外层管理端目录、`src` 或 `.git`。
-
-回到顶部“连接服务器内容”，点击 **从服务器同步并启用**。首次连接会备份旧本地内容，再读取远程博客仓库中的文章、歌单和公开设置。确认文章数量、近期更新与歌单符合服务器最新版本，再开始编辑，避免用空白或过时内容覆盖其他设备的工作。
-
-这里的“服务器内容”指远程 Git 仓库中的目标分支，公开网站展示的是 Vercel 已部署的版本，两者在部署期间可能暂时不同。
-
-填写 Vercel 项目地址只提供跳转入口，**不等于完成 Vercel 登录或项目绑定**。普通内容发布由 GitHub 集成触发，无需本机 Vercel CLI；上传 Robin 密钥需要下一节的单独授权。
-
-</details>
-
-<details>
-<summary><strong>④ 第一次发布：保存 → 预览 → 同步 → 推送 → 检查上线</strong></summary>
-
-1. 在文章、外观或音乐页编辑并保存。**保存只写入本机工作区**，不会立刻修改线上博客。
-2. 进入“发布”，点击 **刷新远程**，有远程新版本时先检查并 **安全更新本地**；刷新服务器内容，确认跨设备更新。
-3. 点击 **生成差异预览**，逐项检查新增、更新和删除。特别核对删除的文章或歌曲是否确实是本次操作。
-4. 计划可用后点击 **应用同步**，将受管内容写入本地博客仓库。
-5. 填写中文提交信息，例如 `内容：新增学习笔记并更新歌单`，不超过 120 字；点击 **提交并推送**，等待任务成功。
-6. 打开 Vercel 项目，找到对应提交的部署。生产分支推送通常直接触发 Production，其他分支通常是 Preview；等 **Ready** 后检查正式网址的文章、图片与音乐页。
-
-| 操作 | 实际结果 |
-| --- | --- |
-| 保存 | 本机编辑结果已保存 |
-| 刷新服务器内容 | 从远程仓库刷新公开内容基准 |
-| 应用同步 | 审查过的内容写入本机博客仓库 |
-| 提交并推送 | 源码交给远程 Git，由 Vercel 仓库集成构建 |
-| 部署 Ready 并检查页面 | 确认正式网站实际更新 |
-
-目标博客仓库有未提交代码改动时，同步会锁定；先检查 `git status --short`，自行保留、提交或处理这些改动。服务器内容变化后需要重新生成计划，不能复用旧预览。推送失败时本地提交会保留，修复权限或网络后再推送，不用强制推送覆盖分歧。
-
-换设备时重复安装和连接步骤，使用同一个远程博客仓库；开始编辑前刷新服务器内容。未发布草稿、账号登录状态与本机设置不会自动复制到另一台电脑。
-
-</details>
-
-<details>
-<summary><strong>⑤ 配置 Robin、图床、书架和音乐账号</strong></summary>
-
-**Robin 密钥**可以直接在 Vercel 配置 `DEEPSEEK_API_KEY`（Production）并重新部署，也可以使用管理端“集成”中的 Robin 配置。后者需要先安装 CLI，并在**本地博客目录**关联已有项目：
-
-```powershell
-npm.cmd install -g vercel
-vercel.cmd login
-Set-Location D:\Projects\YunYueBlogs\YunYueBlog
-vercel.cmd link
+```mermaid
+flowchart LR
+    O[站长浏览器] --> C[创作间 / Worker]
+    C --> D[(D1 草稿与修订)]
+    C --> N[Node 密码与音源解析]
+    C --> G[公开快照 / GitHub]
+    G --> V[Vercel / Astro 博客]
+    U[访客] --> V
+    U --> M[原站 HTTPS / 独立 Cloudflare 音频服务]
 ```
 
-按提示选择正确团队和已经部署的博客项目，不另建一个空项目。`.vercel/` 是本机绑定信息，不提交，每台设备分别登录和关联。然后在管理端填写 API Key，点击 **保存 Robin 配置 → 同步到 Vercel 并部署 → 刷新服务器状态**，同时检查 Vercel 部署结果。模型固定为 **DeepSeek-V4.1-Flash**，仅配置密钥。
+## 自己搭一个
 
-**图床**：在“集成”填写自己图床服务的接口地址与 API Token，保存后用一张非敏感图片验证上传及访问链接。不同图床协议并非都兼容，不能直接使用作者的账号或密钥；上传成功后再将链接加入文章并发布。
-
-**Bangumi**：填写自己的公开用户名，保存集成配置，再通过日常发布流程同步 `src/data/site.json`。无需 Token；如果 Vercel 已配置 `BANGUMI_USERNAME`，它会覆盖公开文件中的用户名。
-
-**音乐账号**：在“音乐”选择网易云或酷狗扫码 / 手机号登录，按官方端要求确认，看到登录状态后再测试歌曲。歌单需要按发布流程上线；本机登录不等于服务器拥有账号。当前界面没有音乐账号一键同步到 Vercel 的按钮，服务器会员音源是额外的私有环境配置；不要把账号 Cookie 填进公开歌单或上传登录文件。会员权益与福利领取以平台实际返回和记录为准。
-
-打开音乐页会先显示已保存的歌曲资料，不再自动逐首查询整张歌单。需要确认时使用单首检查或“检查全部”；带时间的旧结果仅代表上次检查，账号或平台状态改变后应重新检查。离开页面会取消未完成的读取。本机账号可播放与公开博客音源可用仍分别展示。
-
-</details>
-
-## 目录与隐私
-
-```text
-my-blog-manager/
-  app/              控制台页面
-  components/       编辑器与管理组件
-  cms_core/         FastAPI、同步、发布与账号服务
-  services/         本机音乐网关
-  tests/            API 和客户端测试
-  workspace/        本机内容、设置与任务（Git 忽略）
-docs/               当前架构与运维文档
-.github/readme/     README 配图
-```
-
-`workspace/`、`.env*`、本机端口配置、窗口设置、账号文件、旧版本机内容目录、依赖、构建产物和测试缓存不进入 Git。公开博客所需文章、图片、角色素材和公开配置保存在独立博客仓库。
-
-服务端密钥通过 Vercel 环境变量配置；不要把 API Key、Cookie、图床 Token 或 Git 凭据放进公开 JSON、截图或提交。取消跟踪不会抹除已有 Git 历史；曾公开过的真实密钥需要在对应平台撤销并重新生成。
-
-## 验证与恢复
+先 Fork 本仓库与公开博客仓库，准备符合各 `package.json` engines 的 Node.js、Git、Cloudflare 和 Vercel 账号。控制台使用 `cf` CLI；请先登录自己的账号，核对免费额度。
 
 ```powershell
-cd my-blog-manager
+# 在本仓库中运行；公开站是第二个独立 Git 仓库
+ git clone https://github.com/<your-name>/YunYueBlog.git YunYueBlog
+ cd apps/console
+ npm.cmd ci
+ npm.cmd test
+ npm.cmd run build
+```
+
+正式接入顺序是：**Node 服务 → D1 与初始化账号 → 音频 Worker → 创作间 → 公开博客环境变量 → 实际页面验收**。域名、仓库名和绑定名称需要换成自己的，不能直接复用作者的生产配置。
+
+完整步骤见[部署与运维指南](docs/部署与运维指南.md)，各服务的变量和限制见[控制台说明](apps/console/README.md)、[Node 服务说明](services/password-verifier/README.md)。没有默认共享账号；初始化脚本从私有进程环境读取账号与密码，生成一次性激活票据，第一次登录必须改密。
+
+日常使用：在自己的管理域名登录 → 编辑并保存 → 检查选入公开快照的内容 → 发布 → 等待正式站核验。**保存草稿不会立即改动公开站**。初始化后也可以继续通过 Git 编辑公开仓库；多人同时维护时，发布前请核对云端文稿与仓库差异。
+
+## 音乐与费用
+
+音乐搜索支持音源声明的网易云、酷狗、QQ、酷我、咪咕渠道。导入脚本后先测试再启用；第三方音源的可用性、版权和渠道规则由相应提供方决定，不保证每首歌、每种音质都可用。项目不附带第三方音源文件、平台 Cookie 或付费内容。
+
+Vercel 只处理公开页面、少量 JSON 与 Node 解析，音频正文优先原站 HTTPS 直连，需要时走独立 Cloudflare 服务。HTTPS 地址通过正常证书验证，不通过关闭 TLS 校验处理失败。
+
+**绕开 Vercel 不等于没有成本。** Cloudflare Workers 有请求数、CPU 等限制，中转还有服务条款及上游限速；无损会增加访客流量和缓冲时间。默认 320 kbps，支持站长选择无损及兼容回退；可设置滚动 31 日中转预算。平台额度会变，以自己的控制台与官方最新说明为准，不把某个固定额度写成所有套餐的承诺。R2 私有素材默认不创建、不绑定，需要时单独开通。
+
+Robin 聊天使用服务端 DeepSeek API Key，计费独立于网站流量；没有配置时不影响静态阅读与本地小考。
+
+## 开发与贡献
+
+欢迎分享体验、提交问题或提出小功能。提 Issue 时附复现步骤、浏览器与去除隐私后的截图；PR 请说明改动目的和实际验证。
+
+```powershell
+# 创作间
+cd apps/console
 npm.cmd run typecheck
-npm.cmd run test:client
-python -m pytest -q
+npm.cmd test
+npm.cmd run build
+
+# Node 服务
+cd ../../services/password-verifier
+npm.cmd ci
+npm.cmd test
+
+# 公开博客（独立仓库）
+cd ../../YunYueBlog
+npm.cmd ci
+npm.cmd test
 npm.cmd run build
 ```
 
-发布失败时保留本地提交并检查任务日志，不使用强制推送覆盖分歧。线上异常可在 Vercel 切回上一份成功部署，本机工作区独立保留。
+本机凭据、数据库、草稿备份、`.env`、`.cloudflare` 和 `.vercel` 不进入仓库。示例环境文件只放空值；公开内容、运行素材和许可证需要保留。
 
-## 素材与使用范围
+## 参考与许可
 
-角色主题与互动为个人博客中的同人表达，参考《魔法使之夜》2022 全语音高清版及 2023 Steam 版；作品角色和素材权利归原权利人。复用项目前应核对源码、字体、图片和第三方依赖各自的授权，勿将游戏素材误认为项目自行授权的公共资产。
+感谢 [spring_blogs](https://github.com/RRTiamo/spring_blogs)、[QWidgetSekai](https://github.com/Aegisir/QWidgetSekai) 提供产品与交互思路；Web 界面按本项目技术栈独立实现。LX 音源接口适配参考 [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop)，相关适配代码出处与 Apache-2.0 文本见[第三方声明](services/password-verifier/THIRD_PARTY_NOTICES.md)。
+
+仓库自有内容遵循 [CC BY-NC 4.0](LICENSE)。第三方代码、字体、图片、角色与游戏素材各自适用原许可；《魔法使之夜》相关权利属于 TYPE-MOON 及相关权利人，仓库许可不代表取得这些素材的再授权。自建和再分发前请替换个人内容、确认素材使用权限。

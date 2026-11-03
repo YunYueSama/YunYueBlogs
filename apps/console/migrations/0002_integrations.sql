@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS private_settings (
+  name TEXT PRIMARY KEY, ciphertext TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS public_uploads (
+  id TEXT PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, created_at TEXT NOT NULL
+);

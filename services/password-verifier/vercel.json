@@ -10,7 +10,7 @@
     "api/music.mjs": {
       "maxDuration": 30,
       "memory": 512,
-      "includeFiles": "{generated/**,node_modules/@jitl/quickjs-*/**}"
+      "includeFiles": "{generated/**,node_modules/@jitl/quickjs-*/**,node_modules/kugoumusicapi/**,node_modules/@neteasecloudmusicapienhanced/api/**}"
     }
   },
   "headers": [

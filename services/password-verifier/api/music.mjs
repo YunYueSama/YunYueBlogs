@@ -50,5 +50,10 @@ export default async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'method_not_allowed'});
   if(!secret||!timingSafeEqual(hash(req.headers.authorization||''),hash(`Bearer ${secret}`)))return res.status(401).json({error:'unauthorized'});
   try {const input=typeof req.body==='string'?JSON.parse(req.body):req.body;if(!input||Buffer.byteLength(JSON.stringify(input))>600000)return res.status(400).json({error:'invalid_input'});return res.status(200).json(await musicOperation(input));}
-  catch {return res.status(502).json({error:'music_platform_unavailable'});}
+  catch(error) {
+    // 只记录受限分类，不记录脚本、请求正文、上游地址或 SDK 异常详情。
+    const category=typeof error?.code==='string'&&/^[A-Z_]{1,40}$/.test(error.code)?error.code:['source_unavailable','source_timeout','source_busy','invalid_source','invalid_track'].includes(error?.message)?error.message:'operation_failed';
+    console.warn(JSON.stringify({event:'music_operation_failed',category}));
+    return res.status(502).json({error:'music_platform_unavailable'});
+  }
 }

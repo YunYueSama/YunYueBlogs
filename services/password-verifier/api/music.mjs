@@ -12,13 +12,15 @@ async function provider(source,action,params={},cookie={}) {
     return sdk[action]({...params,cookie:Object.entries(cookie).map(([k,v])=>`${k}=${v}`).join('; '),timeout:10000,unblock:false,...(action==='song_url_v1'?{crypto:'eapi'}:{})});
   }
   process.env.platform='lite';
-  const root=require('node:path').dirname(require.resolve('kugoumusicapi/package.json'));
-  require(require.resolve('axios',{paths:[root]})).defaults.timeout=10000;
-  const {calculateMid}=require(root+'/util/util.js');
+  // 使用字面量入口，让 Serverless 文件追踪同时保留 SDK 的传递依赖。
+  require('axios').defaults.timeout=10000;
+  const {calculateMid}=require('kugoumusicapi/util/util.js');
   const guid=cookie.KUGOU_API_GUID||createHash('md5').update(randomUUID()).digest('hex');
   const device={...cookie,KUGOU_API_GUID:guid,KUGOU_API_MID:calculateMid(guid),KUGOU_API_DEV:cookie.KUGOU_API_DEV||randomBytes(5).toString('hex').toUpperCase(),KUGOU_API_MAC:cookie.KUGOU_API_MAC||'02:00:00:00:00:00'};
-  const {createRequest}=require(root+'/util/request.js');
-  const result=await require(root+`/module/${action}.js`)({...params,cookie:device},config=>createRequest({...config,cookie:{...device,...config.cookie}}));
+  const {createRequest}=require('kugoumusicapi/util/request.js');
+  const methods={search:require('kugoumusicapi/module/search.js'),privilege_lite:require('kugoumusicapi/module/privilege_lite.js')};
+  if(!Object.hasOwn(methods,action))throw new Error('invalid_operation');
+  const result=await methods[action]({...params,cookie:device},config=>createRequest({...config,cookie:{...device,...config.cookie}}));
   result.cookie=[...(result.cookie||[]),...Object.entries(device).filter(([k])=>k.startsWith('KUGOU_API_')).map(([k,v])=>`${k}=${v}`)];
   return result;
 }

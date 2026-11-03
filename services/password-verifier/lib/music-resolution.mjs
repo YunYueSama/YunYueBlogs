@@ -43,12 +43,18 @@ async function resolveCustomWork(input,catalog,request){
   const deadline=Math.min(Number(input.deadline)||Infinity,Date.now()+21000);
   for(const quality of input.preference==='lossless'?['flac','320k','128k']:['320k','128k']){
     if(Date.now()>deadline-1000)break;
+    let phase='script';
     try{
       const parsed=await resolveLx(input.script,info,quality,request,Math.max(500,deadline-Date.now()-4000),track.source==='qq'?8000:1500);
+      phase='media';
       const result=await inspectMedia(parsed.url,track.source,Number(catalog?.info?.duration||track.durationMs||0),request);
       if(result.mime==='audio/flac'&&input.preference!=='lossless')continue;
       return {...result,adapter:meta.name};
-    }catch{ /* 单个质量或上游失败后，有限回退；不把脚本错误、密钥或 URL 返回给浏览器。 */ }
+    }catch(error){
+      // 分类用于区分脚本取源与媒体探测；不记录上游地址、脚本异常详情或曲目标识。
+      const category=/^(source_[a-z_]+|unsupported_quality|unsupported_media|invalid_media_[a-z_]+|invalid_audio_tag|incomplete_media)$/.test(error?.message)?error.message:'upstream_unavailable';
+      console.warn(JSON.stringify({event:'music_quality_unavailable',source:track.source,quality,phase,category}));
+    }
   }
   throw new Error('source_unavailable');
 }

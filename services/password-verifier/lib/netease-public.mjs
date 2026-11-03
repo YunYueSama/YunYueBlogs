@@ -1,9 +1,18 @@
 import {createRequire} from 'node:module';
 import {inspectMedia} from './music-resolution.mjs';
 import {publicRequest} from './public-request.mjs';
+import {writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 const require=createRequire(import.meta.url),unavailable=new Map();
 
+export function prepareAnonymousState(directory=tmpdir()){
+  // 与 SDK 主入口相同的空匿名状态；显式模块入口不会自行创建它。
+  try{writeFileSync(join(directory,'anonymous_token'),'',{flag:'wx',mode:0o600});}catch(error){if(error.code!=='EEXIST')throw error;}
+}
+
 async function anonymousLookup(id,preference){
+  prepareAnonymousState();
   const request=require('@neteasecloudmusicapienhanced/api/util/request.js');
   return request('/api/song/enhance/player/url/v1',{ids:JSON.stringify([Number(id)]),level:preference==='lossless'?'lossless':'exhigh',encodeType:preference==='lossless'?'flac':'mp3'},{crypto:'eapi',cookie:{},timeout:900});
 }

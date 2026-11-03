@@ -1,11 +1,19 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {publicNetease} from './lib/netease-public.mjs';
+import {publicNetease,prepareAnonymousState} from './lib/netease-public.mjs';
+import {mkdtempSync,readFileSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {musicOperation} from './api/music.mjs';
 const raw=Buffer.alloc(4096);raw.set([255,251,224,0]);
 const request=async()=>({statusCode:206,headers:{'content-range':'bytes 0-4095/6400000'},raw});
 const track={source:'netease',id:'17',durationMs:160000};
 const row={id:17,url:'https://m7.music.126.net/test.mp3',br:320000,time:160000,freeTrialInfo:null};
+test('冷实例初始化匿名状态且不会覆盖 SDK 已有状态',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'yunyue-anonymous-')),file=join(directory,'anonymous_token');
+  try{prepareAnonymousState(directory);assert.equal(readFileSync(file,'utf8'),'');writeFileSync(file,'existing-anonymous-state');prepareAnonymousState(directory);assert.equal(readFileSync(file,'utf8'),'existing-anonymous-state');}
+  finally{unlinkSync(file);rmdirSync(directory);}
+});
 test('匿名完整高品质地址可用，试听、较低音质及无损不足不能冒充完整高品质',async()=>{
   const lookup=async()=>({body:{data:[row]}});
   assert.equal((await publicNetease(track,'320k',{lookup,request})).quality,'320 kbps');

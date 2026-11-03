@@ -9,6 +9,7 @@ import { sourceMetadata } from '../../../services/password-verifier/lib/lx-sourc
 import { mediaHost } from '../../../services/password-verifier/lib/music-resolution.mjs';
 import { mockMusicOperation } from './mock-integrations.mjs';
 import { musicOperation } from '../../../services/password-verifier/api/music.mjs';
+import {unpackMusicInput} from '../../../services/password-verifier/lib/music-input.mjs';
 import { readPublicContent, importStatements } from '../scripts/import-public.mjs';
 import { localPersistence } from '../scripts/local-persistence.mjs';
 
@@ -27,7 +28,7 @@ const mf=new Miniflare(convertV4MiniflareOptions({...persistence,modules:true,sc
   const url=new URL(request.url);
   if(url.hostname==='local-password.test'){
     const body=await request.json();
-    if(url.pathname==='/api/music'){try{return WorkerResponse.json(await (localReview?musicOperation(body):mockMusicOperation(body)));}catch{return WorkerResponse.json({error:'music_unavailable'},{status:502});}}
+    if(url.pathname==='/api/music'){try{const input=unpackMusicInput(body);return WorkerResponse.json(await (localReview?musicOperation(input):mockMusicOperation(input)));}catch(error){if(error.message==='source_cache_miss')return WorkerResponse.json({error:'source_cache_miss'},{status:409});return WorkerResponse.json({error:'music_unavailable'},{status:502});}}
     return WorkerResponse.json(body.operation==='hash'?{hash:await hashPassword(body.password)}:{valid:await verifyPassword(body.password,body.hash)});
   }
   if(!localReview&&url.hostname==='tu.yunyuesama.cn'){return request.method==='POST'?WorkerResponse.json([{src:'/file/acceptance.webp'}]):new WorkerResponse(null,{status:200});}

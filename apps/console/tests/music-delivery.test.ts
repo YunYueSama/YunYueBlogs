@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash, createHmac } from 'node:crypto';
-import { mockMusicOperation } from './mock-integrations.mjs';
+import { mockMusicOperation,decodeMusicInput } from './mock-integrations.mjs';
 
 let mf: Miniflare; let db: D1Database;
 let resolutions=0;let manifestRequests=0;let lastResolve:Record<string,unknown>={};
@@ -19,7 +19,10 @@ beforeAll(async()=>{
   const bundle=await build({entryPoints:[resolve('worker/index.ts')],bundle:true,write:false,format:'esm',platform:'browser'});
   mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-11-03',d1Databases:['DB'],r2Buckets:['MEDIA'],bindings:{SETTINGS_ENCRYPTION_KEY:secret,MUSIC_DELIVERY_KEY:secret,MUSIC_DELIVERY_BUDGET_BYTES:'2000000',MUSIC_STREAM_ORIGIN:'https://audio.example.test',PASSWORD_SERVICE_URL:'https://internal.test/api/password',PASSWORD_SERVICE_KEY:'test',SITE_URL:'https://site.example.test'},outboundService:async request=>{
     const url=new URL(request.url);
-    if(url.hostname==='internal.test'){const input=await request.json() as {operation:string};if(input.operation==='resolve'){resolutions++;lastResolve=input;}return WorkerResponse.json(await mockMusicOperation(input));}
+    if(url.hostname==='internal.test'){
+      try{const input=decodeMusicInput(await request.json());if(input.operation==='resolve'){resolutions++;lastResolve=input;}return WorkerResponse.json(await mockMusicOperation(input));}
+      catch(error){if(error instanceof Error&&error.message==='source_cache_miss')return WorkerResponse.json({error:'source_cache_miss'},{status:409});throw error;}
+    }
     if(url.hostname==='site.example.test'&&url.pathname==='/music-catalog.json'){manifestRequests++;return WorkerResponse.json(publication);}
     if(url.hostname==='tu.yunyuesama.cn')return WorkerResponse.json([{src:'/file/test.webp'}]);
     if(url.hostname==='fs.youthandroid2.kugou.com'){

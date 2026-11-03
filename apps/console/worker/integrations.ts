@@ -1,4 +1,4 @@
-import { HttpError, json, readBounded, readJson, text } from './http';
+import { HttpError, json, readBounded, readJson, text, sha256 } from './http';
 import { limit } from './auth';
 import { imageType } from './media';
 import { readPrivate, writePrivate } from './private-settings';
@@ -15,7 +15,26 @@ export async function musicService<T>(env:Env,body:object):Promise<T>{
   const url=new URL(env.PASSWORD_SERVICE_URL);url.pathname=url.pathname.replace(/\/password(?:\.mjs)?$/, '/music');
   if(!url.pathname.endsWith('/music'))throw new HttpError(503,'音乐解析服务地址需要使用 /api/password。','music_unavailable');
   try{
-    const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${env.PASSWORD_SERVICE_KEY}`},body:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(25000)});
+    const signal=AbortSignal.timeout(25000);
+    const call=(input:object)=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${env.PASSWORD_SERVICE_KEY}`},body:JSON.stringify(input),redirect:'manual',signal});
+    const input=body as Record<string,unknown>,script=typeof input.script==='string'?input.script:undefined;
+    const metadata={...input};delete metadata.script;
+    const scriptSha256=script?await sha256(script):undefined;
+    let response=await call(scriptSha256?{...metadata,scriptSha256}:body);
+    if(scriptSha256&&response.status===409){
+      const error=await boundedJson(response,8000);
+      if(error.error!=='source_cache_miss')throw new Error();
+      // 温热实例只接收哈希；冷实例补传一次源码，不对取源失败进行重复调用。
+      let payload:object={...metadata,script,scriptSha256};
+      const scriptBytes=new TextEncoder().encode(script!).length;
+      if(scriptBytes>=8192){
+        const bytes=new Uint8Array(await new Response(new Blob([script!]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+        let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));
+        const scriptGzip=btoa(binary);
+        if(scriptGzip.length<scriptBytes)payload={...metadata,scriptGzip,scriptSha256};
+      }
+      response=await call(payload);
+    }
     if(!response.ok)throw new Error();
     return await boundedJson(response,600000) as T;
   }catch{throw new HttpError(502,'音乐服务暂时无法连接，请稍后重试。','music_upstream');}

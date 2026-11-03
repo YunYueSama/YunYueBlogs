@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+export {unpackMusicInput as decodeMusicInput} from '../../../services/password-verifier/lib/music-input.mjs';
 
 // 自动化验收专用，不调用音乐平台、不产生真实扫码会话或上传记录。
 export async function mockMusicOperation(input) {

@@ -58,12 +58,17 @@ export default async function handler(req,res){
   try {
     const raw=typeof req.body==='string'?JSON.parse(req.body):req.body;if(!raw||Buffer.byteLength(JSON.stringify(raw))>600000)return res.status(400).json({error:'invalid_input'});
     const input=unpackMusicInput(raw);
-    const request=async(url,...args)=>{const began=performance.now(),name=mediaHost(new URL(url).hostname,input.source)?'media_net':'source_net';try{return await publicRequest(url,...args);}finally{timing[name]=(timing[name]||0)+performance.now()-began;}};
+    const request=async(url,...args)=>{
+      const began=performance.now(),prefix=mediaHost(new URL(url).hostname,input.source)?'media':'source';
+      try{const result=await publicRequest(url,...args);for(const [name,ms] of Object.entries(result.timing||{}))timing[`${prefix}_${name}`]=(timing[`${prefix}_${name}`]||0)+ms;return result;}
+      finally{timing[`${prefix}_net`]=(timing[`${prefix}_net`]||0)+performance.now()-began;}
+    };
     const result=await musicOperation(input,provider,{request,timing});stamp();return res.status(200).json(result);
   }
   catch(error) {
     stamp();
     if(error?.message==='invalid_input')return res.status(400).json({error:'invalid_input'});
+    if(error?.message==='source_cache_miss')return res.status(409).json({error:'source_cache_miss'});
     // 只记录受限分类，不记录脚本、请求正文、上游地址或 SDK 异常详情。
     const category=typeof error?.code==='string'&&/^[A-Z_]{1,40}$/.test(error.code)?error.code:['source_unavailable','source_timeout','source_busy','invalid_source','invalid_track'].includes(error?.message)?error.message:'operation_failed';
     console.warn(JSON.stringify({event:'music_operation_failed',category}));
